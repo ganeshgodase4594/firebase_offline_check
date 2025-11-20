@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "593877303281",
+    "project_id": "ador-poc",
+    "storage_bucket": "ador-poc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:593877303281:android:ae3d289716b13a380b0e50",
+        "android_client_info": {
+          "package_name": "com.example.ador_poc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbdckcb8q9Y3BFS3WOtpviC5-YtT2W9xE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:593877303281:android:f1c976a9bb890b9f0b0e50",
+        "android_client_info": {
+          "package_name": "com.example.firebase_offline_check"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCbdckcb8q9Y3BFS3WOtpviC5-YtT2W9xE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
