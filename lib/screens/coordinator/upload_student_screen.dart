@@ -1,4 +1,4 @@
-// lib/screens/coordinator/upload_students_screen.dart
+// lib/screens/coordinator/upload_students_screen_v2.dart
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -12,19 +12,45 @@ import '../../service/firebase_service.dart';
 class UploadStudentsScreen extends StatefulWidget {
   final SchoolModel school;
 
-  const UploadStudentsScreen({Key? key, required this.school})
-      : super(key: key);
+  const UploadStudentsScreen({super.key, required this.school});
 
   @override
-  State<UploadStudentsScreen> createState() => _UploadStudentsScreenState();
+  State<UploadStudentsScreen> createState() => _UploadStudentsScreenV2State();
 }
 
-class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
+class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
+  // Step 1: Upload CSV
   List<List<dynamic>>? _csvData;
   List<StudentModel>? _parsedStudents;
+  List<String>? _uniqueGrades;
+
+  // Step 2: Map Grades to Levels
+  Map<String, int>? _gradeLevelMapping;
+
+  // UI State
+  int _currentStep = 0; // 0: Upload, 1: Map Grades, 2: Confirm & Upload
   bool _isLoading = false;
   String? _errorMessage;
   String? _debugMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkExistingMapping();
+  }
+
+  Future<void> _checkExistingMapping() async {
+    // If school already has grade mapping, skip mapping step
+    if (widget.school.gradeToLevelMap.isNotEmpty) {
+      setState(() {
+        _gradeLevelMapping = Map.from(widget.school.gradeToLevelMap);
+      });
+    }
+  }
+
+  // ========================================
+  // STEP 1: UPLOAD CSV & PARSE
+  // ========================================
 
   Future<void> _pickFile() async {
     setState(() {
@@ -36,60 +62,39 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
-        withData: kIsWeb, // Only read bytes on web
+        withData: kIsWeb,
         withReadStream: false,
       );
 
       if (result == null) {
-        setState(() {
-          _debugMessage = 'No file selected';
-        });
+        setState(() => _debugMessage = 'No file selected');
         return;
       }
 
-      setState(() {
-        _debugMessage = 'File selected: ${result.files.first.name}';
-      });
-
       String csvString;
 
-      // Different handling for Web vs Mobile
       if (kIsWeb) {
-        // Web platform - use bytes
         if (result.files.first.bytes != null) {
-          final bytes = result.files.first.bytes!;
-          setState(() {
-            _debugMessage = 'Reading file (Web)... Size: ${bytes.length} bytes';
-          });
-          csvString = utf8.decode(bytes);
+          csvString = utf8.decode(result.files.first.bytes!);
         } else {
           setState(() {
-            _errorMessage = 'Could not read file bytes on web';
-            _debugMessage = 'Error: File bytes are null (Web)';
+            _errorMessage = 'Could not read file on web';
+            _debugMessage = 'Error: File bytes are null';
           });
           return;
         }
       } else {
-        // Mobile platform (Android/iOS) - use path
         if (result.files.first.path != null) {
-          setState(() {
-            _debugMessage =
-                'Reading file (Mobile)... Path: ${result.files.first.path}';
-          });
           final file = File(result.files.first.path!);
           csvString = await file.readAsString();
         } else {
           setState(() {
-            _errorMessage = 'Could not read file path on mobile';
-            _debugMessage = 'Error: File path is null (Mobile)';
+            _errorMessage = 'Could not read file on mobile';
+            _debugMessage = 'Error: File path is null';
           });
           return;
         }
       }
-
-      setState(() {
-        _debugMessage = 'Decoding CSV...';
-      });
 
       final List<List<dynamic>> csvData =
           const CsvToListConverter().convert(csvString);
@@ -104,41 +109,26 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
     } catch (e) {
       setState(() {
         _errorMessage = 'Error reading file: $e';
-        _debugMessage = 'Exception: $e\nPlatform: ${kIsWeb ? "Web" : "Mobile"}';
+        _debugMessage = 'Exception: $e';
       });
-      print('File picker error: $e');
     }
   }
 
   void _parseCSV(List<List<dynamic>> csvData) {
-    setState(() {
-      _debugMessage = 'Parsing CSV data...';
-    });
-
     if (csvData.isEmpty) {
       setState(() {
         _errorMessage = 'CSV file is empty';
-        _debugMessage = 'Error: No rows in CSV';
       });
       return;
     }
 
-    print('CSV Headers: ${csvData[0]}');
-
     final headers =
         csvData[0].map((e) => e.toString().trim().toLowerCase()).toList();
-
-    setState(() {
-      _debugMessage = 'Headers found: ${headers.join(", ")}';
-    });
 
     final nameIndex = headers.indexOf('name');
     final uidIndex = headers.indexOf('uid');
     final gradeIndex = headers.indexOf('grade');
     final divisionIndex = headers.indexOf('division');
-
-    print(
-        'Column indices - Name: $nameIndex, UID: $uidIndex, Grade: $gradeIndex, Division: $divisionIndex');
 
     if (nameIndex == -1 ||
         uidIndex == -1 ||
@@ -152,6 +142,7 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
     }
 
     final students = <StudentModel>[];
+    final grades = <String>{};
     int skippedRows = 0;
 
     for (int i = 1; i < csvData.length; i++) {
@@ -162,7 +153,6 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
           row.length <= gradeIndex ||
           row.length <= divisionIndex) {
         skippedRows++;
-        print('Skipped row $i: insufficient columns');
         continue;
       }
 
@@ -173,15 +163,12 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
 
       if (name.isEmpty || uid.isEmpty || grade.isEmpty) {
         skippedRows++;
-        print('Skipped row $i: empty required fields');
         continue;
       }
 
-      // Get level from grade mapping
-      final level = widget.school.gradeToLevelMap[grade] ?? 1;
+      grades.add(grade);
 
-      print('Row $i: $name, $uid, $grade, $division, Level: $level');
-
+      // Level will be assigned after mapping (default to 1 for now)
       final student = StudentModel(
         id: '',
         uid: uid,
@@ -189,7 +176,7 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
         schoolId: widget.school.id,
         grade: grade,
         division: division,
-        level: level,
+        level: 1, // Temporary, will be updated after mapping
         createdAt: DateTime.now(),
       );
 
@@ -198,12 +185,56 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
 
     setState(() {
       _parsedStudents = students;
+      _uniqueGrades = grades.toList()..sort();
       _debugMessage =
-          'Parsed ${students.length} students. Skipped $skippedRows rows.';
-    });
+          'Parsed ${students.length} students with ${grades.length} unique grades';
 
-    print('Total students parsed: ${students.length}');
+      // Move to mapping step
+      _currentStep = 1;
+
+      // Initialize mapping with existing school mapping or defaults
+      _gradeLevelMapping = {};
+      for (var grade in _uniqueGrades!) {
+        _gradeLevelMapping![grade] = widget.school.gradeToLevelMap[grade] ?? 1;
+      }
+    });
   }
+
+  // ========================================
+  // STEP 2: MAP GRADES TO LEVELS
+  // ========================================
+
+  void _updateGradeMapping(String grade, int level) {
+    setState(() {
+      _gradeLevelMapping![grade] = level;
+    });
+  }
+
+  void _applyMappingToStudents() {
+    if (_parsedStudents == null || _gradeLevelMapping == null) return;
+
+    setState(() {
+      _parsedStudents = _parsedStudents!.map((student) {
+        final level = _gradeLevelMapping![student.grade] ?? 1;
+        return StudentModel(
+          id: student.id,
+          uid: student.uid,
+          name: student.name,
+          schoolId: student.schoolId,
+          grade: student.grade,
+          division: student.division,
+          level: level,
+          createdAt: student.createdAt,
+        );
+      }).toList();
+
+      _currentStep = 2; // Move to confirmation step
+    });
+  }
+
+  // ========================================
+  // STEP 3: UPLOAD TO FIREBASE
+  // ========================================
 
   Future<void> _uploadStudents() async {
     if (_parsedStudents == null || _parsedStudents!.isEmpty) return;
@@ -212,8 +243,16 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Upload'),
-        content: Text(
-          'Are you sure you want to upload ${_parsedStudents!.length} students to ${widget.school.name}?',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+                'Upload ${_parsedStudents!.length} students to ${widget.school.name}?'),
+            const SizedBox(height: 16),
+            const Text(
+                'This will also update the school\'s grade-level mapping.'),
+          ],
         ),
         actions: [
           TextButton(
@@ -236,11 +275,14 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
     });
 
     try {
-      print('Creating batch of ${_parsedStudents!.length} students');
+      // Step 1: Update school's grade mapping
+      await FirebaseService.updateSchool(
+        widget.school.id,
+        {'gradeToLevelMap': _gradeLevelMapping},
+      );
 
+      // Step 2: Upload students in batch
       final ids = await FirebaseService.createStudentsBatch(_parsedStudents!);
-
-      print('Upload successful. Created ${ids.length} students');
 
       setState(() {
         _isLoading = false;
@@ -264,9 +306,7 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${_parsedStudents!.length} students have been uploaded successfully to ${widget.school.name}.',
-                  style: const TextStyle(fontSize: 16),
-                ),
+                    '${_parsedStudents!.length} students uploaded successfully.'),
                 const SizedBox(height: 16),
                 Container(
                   padding: const EdgeInsets.all(12),
@@ -274,16 +314,16 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
                     color: Colors.green[50],
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: Row(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.info_outline, color: Colors.green),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          'Students are now available for assessment.',
-                          style: TextStyle(color: Colors.green[900]),
-                        ),
+                      const Text(
+                        'Grade-Level Mapping Saved:',
+                        style: TextStyle(fontWeight: FontWeight.bold),
                       ),
+                      const SizedBox(height: 8),
+                      ..._gradeLevelMapping!.entries.map((entry) =>
+                          Text('${entry.key} → Level ${entry.value}')),
                     ],
                   ),
                 ),
@@ -302,25 +342,25 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
         );
       }
     } catch (e) {
-      print('Upload error: $e');
-
       setState(() {
         _isLoading = false;
         _errorMessage = 'Error uploading students: $e';
-        _debugMessage = 'Upload failed with exception: $e';
       });
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error uploading students: $e'),
+            content: Text('Error: $e'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 5),
           ),
         );
       }
     }
   }
+
+  // ========================================
+  // UI BUILDER
+  // ========================================
 
   @override
   Widget build(BuildContext context) {
@@ -328,179 +368,214 @@ class _UploadStudentsScreenState extends State<UploadStudentsScreen> {
       appBar: AppBar(
         title: const Text('Upload Students'),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Card(
-              color: Colors.blue[50],
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.info_outline, color: Colors.blue),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Upload to: ${widget.school.name}',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    const Text('Required CSV columns:'),
-                    const Text('• Name (Student full name)'),
-                    const Text('• UID (Unique ID: schoolCode + number)'),
-                    const Text('• Grade (e.g., Nursery, UKG, etc.)'),
-                    const Text('• Division (e.g., A, B, Rigel, etc.)'),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (_debugMessage != null)
-              Card(
-                color: Colors.grey[100],
-                child: Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.bug_report,
-                          size: 20, color: Colors.grey),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _debugMessage!,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            const SizedBox(height: 16),
-            ElevatedButton.icon(
-              onPressed: _isLoading ? null : _pickFile,
-              icon: const Icon(Icons.upload_file),
-              label: const Text('Select CSV File'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-              ),
-            ),
-            const SizedBox(height: 16),
-            if (_errorMessage != null)
-              Card(
-                color: Colors.red[50],
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.error_outline, color: Colors.red),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _errorMessage!,
-                          style: const TextStyle(color: Colors.red),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            if (_parsedStudents != null) ...[
-              const SizedBox(height: 16),
-              Card(
-                color: Colors.green[50],
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.check_circle, color: Colors.green),
-                      const SizedBox(width: 8),
-                      Text(
-                        '${_parsedStudents!.length} students ready to upload',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'Preview (first 10 students):',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Expanded(
-                child: Card(
-                  child: ListView.builder(
-                    itemCount: _parsedStudents!.length > 10
-                        ? 10
-                        : _parsedStudents!.length,
-                    itemBuilder: (context, index) {
-                      final student = _parsedStudents![index];
-                      return ListTile(
-                        leading: CircleAvatar(
-                          child: Text('${index + 1}'),
-                        ),
-                        title: Text(student.name),
-                        subtitle: Text(
-                          'UID: ${student.uid}\n${student.grade} - ${student.division} | Level ${student.level}',
-                        ),
-                        isThreeLine: true,
-                      );
-                    },
-                  ),
-                ),
-              ),
-              if (_parsedStudents!.length > 10)
-                Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Text(
-                    '... and ${_parsedStudents!.length - 10} more students',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 16),
-              ElevatedButton.icon(
-                onPressed: _isLoading ? null : _uploadStudents,
-                icon: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Icon(Icons.cloud_upload),
-                label: Text(_isLoading ? 'Uploading...' : 'Upload Students'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Colors.green,
-                ),
-              ),
-            ],
-          ],
-        ),
+      body: Stepper(
+        currentStep: _currentStep,
+        onStepTapped: (step) {
+          if (step < _currentStep) {
+            setState(() => _currentStep = step);
+          }
+        },
+        onStepContinue: () {
+          if (_currentStep == 0 && _parsedStudents != null) {
+            setState(() => _currentStep = 1);
+          } else if (_currentStep == 1 && _gradeLevelMapping != null) {
+            _applyMappingToStudents();
+          } else if (_currentStep == 2) {
+            _uploadStudents();
+          }
+        },
+        onStepCancel: () {
+          if (_currentStep > 0) {
+            setState(() => _currentStep--);
+          }
+        },
+        steps: [
+          Step(
+            title: const Text('Upload CSV'),
+            isActive: _currentStep >= 0,
+            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
+            content: _buildStep1UploadCSV(),
+          ),
+          Step(
+            title: const Text('Map Grades to Levels'),
+            isActive: _currentStep >= 1,
+            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
+            content: _buildStep2MapGrades(),
+          ),
+          Step(
+            title: const Text('Confirm & Upload'),
+            isActive: _currentStep >= 2,
+            content: _buildStep3Confirm(),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildStep1UploadCSV() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          color: Colors.blue[50],
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Upload to: ${widget.school.name}',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text('Required CSV columns (no Level column needed):'),
+                const Text('• Name'),
+                const Text('• UID (schoolCode + number)'),
+                const Text('• Grade'),
+                const Text('• Division'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton.icon(
+          onPressed: _isLoading ? null : _pickFile,
+          icon: const Icon(Icons.upload_file),
+          label: const Text('Select CSV File'),
+        ),
+        if (_errorMessage != null) ...[
+          const SizedBox(height: 16),
+          Card(
+            color: Colors.red[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(_errorMessage!,
+                  style: const TextStyle(color: Colors.red)),
+            ),
+          ),
+        ],
+        if (_parsedStudents != null) ...[
+          const SizedBox(height: 16),
+          Card(
+            color: Colors.green[50],
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                '✓ ${_parsedStudents!.length} students parsed\n✓ ${_uniqueGrades!.length} unique grades found',
+                style: const TextStyle(
+                    color: Colors.green, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildStep2MapGrades() {
+    if (_uniqueGrades == null || _gradeLevelMapping == null) {
+      return const Text('Please upload CSV first');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          color: Colors.amber[50],
+          child: const Padding(
+            padding: EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Map Each Grade to Brainmoto Level (1-8)',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                SizedBox(height: 8),
+                Text('These grades were found in your CSV:'),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ..._uniqueGrades!.map((grade) => Card(
+              child: ListTile(
+                title: Text(grade,
+                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                trailing: DropdownButton<int>(
+                  value: _gradeLevelMapping![grade],
+                  items: List.generate(8, (i) => i + 1).map((level) {
+                    return DropdownMenuItem(
+                      value: level,
+                      child: Text('Level $level'),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      _updateGradeMapping(grade, value);
+                    }
+                  },
+                ),
+              ),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildStep3Confirm() {
+    if (_parsedStudents == null) {
+      return const Text('Please complete previous steps');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Card(
+          color: Colors.green[50],
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ready to Upload',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+                ),
+                const SizedBox(height: 12),
+                Text('Students: ${_parsedStudents!.length}'),
+                Text('Grades: ${_uniqueGrades!.length}'),
+                const SizedBox(height: 16),
+                const Text(
+                  'Grade-Level Mapping:',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                ..._gradeLevelMapping!.entries
+                    .map((e) => Text('${e.key} → Level ${e.value}')),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Text('Preview (first 5 students):'),
+        const SizedBox(height: 8),
+        ...List.generate(
+          _parsedStudents!.length > 5 ? 5 : _parsedStudents!.length,
+          (i) {
+            final student = _parsedStudents![i];
+            return Card(
+              child: ListTile(
+                title: Text(student.name),
+                subtitle: Text(
+                    'UID: ${student.uid}\n${student.grade} - ${student.division} | Level ${student.level}'),
+                isThreeLine: true,
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

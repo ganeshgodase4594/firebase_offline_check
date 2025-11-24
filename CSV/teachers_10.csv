@@ -1,0 +1,11 @@
+Name,Email,Phone,AssignedGradesDivisions
+John Doe,john@school.com,9876543210,"Nursery-A,Nursery-B,UKG-Rigel"
+Jane Smith,jane@school.com,9876543211,"LKG-A,LKG-B,LKG-C"
+Mike Teacher,mike@school.com,9876543212,Nursery
+Priya Mentor,priya@school.com,9876543213,"Nursery-A,UKG-Rigel"
+Rohan Guide,rohan@school.com,9876543214,"LKG-A,UKG-Rigel"
+Sara Coach,sara@school.com,9876543215,"Nursery-B,LKG-B"
+Kabir Tutor,kabir@school.com,9876543216,"Nursery-A,Nursery-C"
+Tara Ma'am,tara@school.com,9876543217,"LKG-A,LKG-C"
+Om Sir,om@school.com,9876543218,UKG-Rigel
+Nisha Teacher,nisha@school.com,9876543219,"Nursery-A,LKG-B,UKG-Rigel"

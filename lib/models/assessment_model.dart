@@ -1,18 +1,20 @@
-// lib/models/assessment_model.dart
-import 'package:brainmoto_app/models/student_model.dart';
-
+// lib/models/assessment_model_updated.dart
 class AssessmentModel {
   final String id;
   final String studentId;
   final String teacherId;
   final String schoolId;
   final int level;
-  final Map<String, dynamic>
-      responses; // {"response0": 10, "response1": 15, ...}
+  final Map<String, dynamic> responses;
   final DateTime assessmentDate;
+
+  // NEW: Academic year and term tracking
+  final String academicYear; // "2024-2025"
+  final String term; // "Term 1" or "Term 2"
+
   final bool isSynced;
   final DateTime? syncedAt;
-  final String assessmentType; // 'by_student' or 'by_skill'
+  final String assessmentType;
 
   AssessmentModel({
     required this.id,
@@ -22,6 +24,8 @@ class AssessmentModel {
     required this.level,
     required this.responses,
     required this.assessmentDate,
+    required this.academicYear,
+    required this.term,
     this.isSynced = false,
     this.syncedAt,
     required this.assessmentType,
@@ -37,6 +41,8 @@ class AssessmentModel {
       responses: Map<String, dynamic>.from(data['responses'] ?? {}),
       assessmentDate: DateTime.parse(
           data['assessmentDate'] ?? DateTime.now().toIso8601String()),
+      academicYear: data['academicYear'] ?? '',
+      term: data['term'] ?? 'Term 1',
       isSynced: data['isSynced'] ?? false,
       syncedAt:
           data['syncedAt'] != null ? DateTime.parse(data['syncedAt']) : null,
@@ -52,26 +58,11 @@ class AssessmentModel {
       'level': level,
       'responses': responses,
       'assessmentDate': assessmentDate.toIso8601String(),
+      'academicYear': academicYear,
+      'term': term,
       'isSynced': isSynced,
       'syncedAt': syncedAt?.toIso8601String(),
       'assessmentType': assessmentType,
-    };
-  }
-
-  // Convert to CSV format for export
-  Map<String, dynamic> toCsvFormat(StudentModel student) {
-    return {
-      'Name': student.name,
-      'UID': student.uid,
-      'Grade': student.grade,
-      'Division': student.division,
-      'response0': responses['response0'] ?? '',
-      'response1': responses['response1'] ?? '',
-      'response2': responses['response2'] ?? '',
-      'response3': responses['response3'] ?? '',
-      'response4': responses['response4'] ?? '',
-      'response5': responses['response5'] ?? '',
-      'Level': level,
     };
   }
 }

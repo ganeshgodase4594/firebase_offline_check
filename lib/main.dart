@@ -84,7 +84,7 @@ class BrainmotoApp extends StatelessWidget {
         home: const SplashScreen(),
         routes: {
           '/login': (context) => const LoginScreen(),
-          '/teacher-dashboard': (context) => const TeacherDashboard(),
+          '/teacher-dashboard': (context) => const TeacherDashboardV2(),
           '/coordinator-dashboard': (context) => const CoordinatorDashboard(),
           '/super-admin-dashboard': (context) => const SuperAdminDashboard(),
         },

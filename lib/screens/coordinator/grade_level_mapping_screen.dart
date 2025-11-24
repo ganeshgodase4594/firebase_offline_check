@@ -6,8 +6,7 @@ import '../../models/school_model.dart';
 class GradeLevelMappingScreen extends StatefulWidget {
   final SchoolModel school;
 
-  const GradeLevelMappingScreen({Key? key, required this.school})
-      : super(key: key);
+  const GradeLevelMappingScreen({super.key, required this.school});
 
   @override
   State<GradeLevelMappingScreen> createState() =>

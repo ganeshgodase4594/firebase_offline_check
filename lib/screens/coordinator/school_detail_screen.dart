@@ -1,10 +1,14 @@
-// lib/screens/coordinator/school_detail_screen.dart
+// lib/screens/coordinator/school_detail_screen_v2.dart
+import 'package:brainmoto_app/screens/coordinator/acadamic_year_managment.dart';
+import 'package:brainmoto_app/screens/coordinator/grade_remapping_screen.dart';
+import 'package:brainmoto_app/screens/coordinator/student_managment-screen.dart';
+import 'package:brainmoto_app/screens/coordinator/teacher_managment_screen.dart';
 import 'package:brainmoto_app/screens/coordinator/upload_student_screen.dart';
 import 'package:brainmoto_app/screens/coordinator/upload_teacher_screen.dart';
 import 'package:flutter/material.dart';
 import '../../models/school_model.dart';
 import 'export_data_screen.dart';
-import 'grade_level_mapping_screen.dart';
+import 'add_teacher_screen.dart';
 
 class SchoolDetailScreen extends StatelessWidget {
   final SchoolModel school;
@@ -54,9 +58,37 @@ class SchoolDetailScreen extends StatelessWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
 
-          // Management Options
+          // Academic Year Management Section
+          const Text(
+            'Academic Year',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4e3f8a),
+            ),
+          ),
+          const SizedBox(height: 12),
+          _buildActionCard(
+            context,
+            'Academic Year & Terms',
+            'Manage academic year, terms, and archive data',
+            Icons.calendar_today,
+            Colors.blue,
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) =>
+                      AcademicYearManagementScreen(school: school),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // Data Management Section
           const Text(
             'Data Management',
             style: TextStyle(
@@ -67,11 +99,46 @@ class SchoolDetailScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
 
+          // Grade Mapping
           _buildActionCard(
             context,
-            'Upload Students',
-            'Import student data via CSV',
+            'Grade-Level Mapping',
+            'Map school grades to Brainmoto levels',
+            Icons.link,
+            Colors.purple,
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => GradeRemappingScreen(school: school),
+                ),
+              );
+            },
+          ),
+
+          // Student Management
+          _buildActionCard(
+            context,
+            'Manage Students',
+            'View, add, edit, and manage students',
+            Icons.people,
+            Colors.green,
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => StudentManagementScreen(school: school),
+                ),
+              );
+            },
+          ),
+
+          _buildActionCard(
+            context,
+            'Bulk Upload Students (CSV)',
+            'Import multiple students via CSV file',
             Icons.upload_file,
+            Colors.teal,
             () {
               Navigator.push(
                 context,
@@ -82,11 +149,45 @@ class SchoolDetailScreen extends StatelessWidget {
             },
           ),
 
+          // Teacher Management
           _buildActionCard(
             context,
-            'Upload Teachers',
-            'Import teacher data via CSV',
+            'Manage Teachers',
+            'View, edit assignments, and manage teachers',
+            Icons.person,
+            Colors.indigo,
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => TeacherManagementScreen(school: school),
+                ),
+              );
+            },
+          ),
+
+          _buildActionCard(
+            context,
+            'Add Individual Teacher',
+            'Create a single teacher account',
             Icons.person_add,
+            Colors.blue,
+            () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => AddTeacherScreen(school: school),
+                ),
+              );
+            },
+          ),
+
+          _buildActionCard(
+            context,
+            'Bulk Upload Teachers (CSV)',
+            'Import multiple teachers via CSV file',
+            Icons.upload,
+            Colors.cyan,
             () {
               Navigator.push(
                 context,
@@ -97,26 +198,25 @@ class SchoolDetailScreen extends StatelessWidget {
             },
           ),
 
-          _buildActionCard(
-            context,
-            'Grade-Level Mapping',
-            'Map school grades to Brainmoto levels',
-            Icons.link,
-            () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => GradeLevelMappingScreen(school: school),
-                ),
-              );
-            },
+          const SizedBox(height: 24),
+
+          // Reports Section
+          const Text(
+            'Reports & Export',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: Color(0xFF4e3f8a),
+            ),
           ),
+          const SizedBox(height: 12),
 
           _buildActionCard(
             context,
             'Export Assessment Data',
-            'Download or sync assessment results',
+            'Download assessment results as CSV',
             Icons.download,
+            Colors.orange,
             () {
               Navigator.push(
                 context,
@@ -157,21 +257,22 @@ class SchoolDetailScreen extends StatelessWidget {
     String title,
     String subtitle,
     IconData icon,
+    Color color,
     VoidCallback onTap,
   ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: const Color(0xFF4e3f8a).withOpacity(0.1),
-          child: Icon(icon, color: const Color(0xFF4e3f8a)),
+          backgroundColor: color.withOpacity(0.1),
+          child: Icon(icon, color: color),
         ),
         title: Text(
           title,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: onTap,
       ),
     );

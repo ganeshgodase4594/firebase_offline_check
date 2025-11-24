@@ -6,8 +6,8 @@ import '../models/student_model.dart';
 import '../models/assessment_question_model.dart';
 
 class AppProvider with ChangeNotifier {
-  List<SchoolModel> _schools = [];
-  List<StudentModel> _students = [];
+  final List<SchoolModel> _schools = [];
+  final List<StudentModel> _students = [];
   List<AssessmentQuestionModel> _questions = [];
   bool _isLoading = false;
   String? _errorMessage;
