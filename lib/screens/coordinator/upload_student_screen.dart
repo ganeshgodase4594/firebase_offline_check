@@ -1,62 +1,32 @@
-// lib/screens/coordinator/upload_students_screen_v2.dart
+// lib/screens/coordinator/upload_students_refactored.dart
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:csv/csv.dart';
 import 'dart:convert';
 import 'dart:io';
-import '../../models/school_model.dart';
+import '../../providers/coordinator_provider.dart';
 import '../../models/student_model.dart';
-import '../../service/firebase_service.dart';
 
-class UploadStudentsScreen extends StatefulWidget {
-  final SchoolModel school;
-
-  const UploadStudentsScreen({super.key, required this.school});
+class UploadStudentsScreenRefactored extends StatefulWidget {
+  const UploadStudentsScreenRefactored({super.key});
 
   @override
-  State<UploadStudentsScreen> createState() => _UploadStudentsScreenV2State();
+  State<UploadStudentsScreenRefactored> createState() =>
+      _UploadStudentsScreenRefactoredState();
 }
 
-class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
-  // Step 1: Upload CSV
-  List<List<dynamic>>? _csvData;
+class _UploadStudentsScreenRefactoredState
+    extends State<UploadStudentsScreenRefactored> {
   List<StudentModel>? _parsedStudents;
   List<String>? _uniqueGrades;
-
-  // Step 2: Map Grades to Levels
   Map<String, int>? _gradeLevelMapping;
-
-  // UI State
-  int _currentStep = 0; // 0: Upload, 1: Map Grades, 2: Confirm & Upload
-  bool _isLoading = false;
+  int _currentStep = 0;
   String? _errorMessage;
-  String? _debugMessage;
 
-  @override
-  void initState() {
-    super.initState();
-    _checkExistingMapping();
-  }
-
-  Future<void> _checkExistingMapping() async {
-    // If school already has grade mapping, skip mapping step
-    if (widget.school.gradeToLevelMap.isNotEmpty) {
-      setState(() {
-        _gradeLevelMapping = Map.from(widget.school.gradeToLevelMap);
-      });
-    }
-  }
-
-  // ========================================
-  // STEP 1: UPLOAD CSV & PARSE
-  // ========================================
-
-  Future<void> _pickFile() async {
-    setState(() {
-      _debugMessage = 'Opening file picker...';
-      _errorMessage = null;
-    });
+  Future<void> _pickFile(BuildContext context) async {
+    setState(() => _errorMessage = null);
 
     try {
       final result = await FilePicker.platform.pickFiles(
@@ -66,10 +36,7 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
         withReadStream: false,
       );
 
-      if (result == null) {
-        setState(() => _debugMessage = 'No file selected');
-        return;
-      }
+      if (result == null) return;
 
       String csvString;
 
@@ -77,10 +44,7 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
         if (result.files.first.bytes != null) {
           csvString = utf8.decode(result.files.first.bytes!);
         } else {
-          setState(() {
-            _errorMessage = 'Could not read file on web';
-            _debugMessage = 'Error: File bytes are null';
-          });
+          setState(() => _errorMessage = 'Could not read file on web');
           return;
         }
       } else {
@@ -88,37 +52,21 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
           final file = File(result.files.first.path!);
           csvString = await file.readAsString();
         } else {
-          setState(() {
-            _errorMessage = 'Could not read file on mobile';
-            _debugMessage = 'Error: File path is null';
-          });
+          setState(() => _errorMessage = 'Could not read file on mobile');
           return;
         }
       }
 
-      final List<List<dynamic>> csvData =
-          const CsvToListConverter().convert(csvString);
-
-      setState(() {
-        _csvData = csvData;
-        _errorMessage = null;
-        _debugMessage = 'CSV loaded: ${csvData.length} rows found';
-      });
-
-      _parseCSV(csvData);
+      final csvData = const CsvToListConverter().convert(csvString);
+      _parseCSV(csvData, context);
     } catch (e) {
-      setState(() {
-        _errorMessage = 'Error reading file: $e';
-        _debugMessage = 'Exception: $e';
-      });
+      setState(() => _errorMessage = 'Error reading file: $e');
     }
   }
 
-  void _parseCSV(List<List<dynamic>> csvData) {
+  void _parseCSV(List<List<dynamic>> csvData, BuildContext context) {
     if (csvData.isEmpty) {
-      setState(() {
-        _errorMessage = 'CSV file is empty';
-      });
+      setState(() => _errorMessage = 'CSV file is empty');
       return;
     }
 
@@ -136,14 +84,15 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
         divisionIndex == -1) {
       setState(() {
         _errorMessage = 'Missing required columns: Name, UID, Grade, Division';
-        _debugMessage = 'Available headers: ${headers.join(", ")}';
       });
       return;
     }
 
+    final provider = Provider.of<CoordinatorProvider>(context, listen: false);
+    final school = provider.selectedSchool!;
+
     final students = <StudentModel>[];
     final grades = <String>{};
-    int skippedRows = 0;
 
     for (int i = 1; i < csvData.length; i++) {
       final row = csvData[i];
@@ -152,7 +101,6 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
           row.length <= uidIndex ||
           row.length <= gradeIndex ||
           row.length <= divisionIndex) {
-        skippedRows++;
         continue;
       }
 
@@ -161,22 +109,18 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
       final grade = row[gradeIndex].toString().trim();
       final division = row[divisionIndex].toString().trim();
 
-      if (name.isEmpty || uid.isEmpty || grade.isEmpty) {
-        skippedRows++;
-        continue;
-      }
+      if (name.isEmpty || uid.isEmpty || grade.isEmpty) continue;
 
       grades.add(grade);
 
-      // Level will be assigned after mapping (default to 1 for now)
       final student = StudentModel(
         id: '',
         uid: uid,
         name: name,
-        schoolId: widget.school.id,
+        schoolId: school.id,
         grade: grade,
         division: division,
-        level: 1, // Temporary, will be updated after mapping
+        level: 1, // Will be updated after mapping
         createdAt: DateTime.now(),
       );
 
@@ -186,32 +130,25 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
     setState(() {
       _parsedStudents = students;
       _uniqueGrades = grades.toList()..sort();
-      _debugMessage =
-          'Parsed ${students.length} students with ${grades.length} unique grades';
-
-      // Move to mapping step
       _currentStep = 1;
 
-      // Initialize mapping with existing school mapping or defaults
+      // Initialize mapping
       _gradeLevelMapping = {};
       for (var grade in _uniqueGrades!) {
-        _gradeLevelMapping![grade] = widget.school.gradeToLevelMap[grade] ?? 1;
+        _gradeLevelMapping![grade] = school.gradeToLevelMap[grade] ?? 1;
       }
     });
   }
 
-  // ========================================
-  // STEP 2: MAP GRADES TO LEVELS
-  // ========================================
-
   void _updateGradeMapping(String grade, int level) {
-    setState(() {
-      _gradeLevelMapping![grade] = level;
-    });
+    setState(() => _gradeLevelMapping![grade] = level);
   }
 
   void _applyMappingToStudents() {
     if (_parsedStudents == null || _gradeLevelMapping == null) return;
+
+    final provider = Provider.of<CoordinatorProvider>(context, listen: false);
+    final school = provider.selectedSchool!;
 
     setState(() {
       _parsedStudents = _parsedStudents!.map((student) {
@@ -220,7 +157,7 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
           id: student.id,
           uid: student.uid,
           name: student.name,
-          schoolId: student.schoolId,
+          schoolId: school.id,
           grade: student.grade,
           division: student.division,
           level: level,
@@ -228,15 +165,11 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
         );
       }).toList();
 
-      _currentStep = 2; // Move to confirmation step
+      _currentStep = 2;
     });
   }
 
-  // ========================================
-  // STEP 3: UPLOAD TO FIREBASE
-  // ========================================
-
-  Future<void> _uploadStudents() async {
+  Future<void> _uploadStudents(BuildContext context) async {
     if (_parsedStudents == null || _parsedStudents!.isEmpty) return;
 
     final confirm = await showDialog<bool>(
@@ -247,11 +180,9 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-                'Upload ${_parsedStudents!.length} students to ${widget.school.name}?'),
+            Text('Upload ${_parsedStudents!.length} students?'),
             const SizedBox(height: 16),
-            const Text(
-                'This will also update the school\'s grade-level mapping.'),
+            const Text('This will also update the grade-level mapping.'),
           ],
         ),
         actions: [
@@ -269,25 +200,10 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
 
     if (confirm != true) return;
 
-    setState(() {
-      _isLoading = true;
-      _debugMessage = 'Starting upload...';
-    });
+    final provider = Provider.of<CoordinatorProvider>(context, listen: false);
 
     try {
-      // Step 1: Update school's grade mapping
-      await FirebaseService.updateSchool(
-        widget.school.id,
-        {'gradeToLevelMap': _gradeLevelMapping},
-      );
-
-      // Step 2: Upload students in batch
-      final ids = await FirebaseService.createStudentsBatch(_parsedStudents!);
-
-      setState(() {
-        _isLoading = false;
-        _debugMessage = 'Upload completed successfully!';
-      });
+      await provider.uploadStudentsBatch(_parsedStudents!, _gradeLevelMapping!);
 
       if (mounted) {
         showDialog(
@@ -342,77 +258,78 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
         );
       }
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _errorMessage = 'Error uploading students: $e';
-      });
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error: $e'),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
         );
       }
     }
   }
 
-  // ========================================
-  // UI BUILDER
-  // ========================================
-
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Upload Students'),
-      ),
-      body: Stepper(
-        currentStep: _currentStep,
-        onStepTapped: (step) {
-          if (step < _currentStep) {
-            setState(() => _currentStep = step);
-          }
-        },
-        onStepContinue: () {
-          if (_currentStep == 0 && _parsedStudents != null) {
-            setState(() => _currentStep = 1);
-          } else if (_currentStep == 1 && _gradeLevelMapping != null) {
-            _applyMappingToStudents();
-          } else if (_currentStep == 2) {
-            _uploadStudents();
-          }
-        },
-        onStepCancel: () {
-          if (_currentStep > 0) {
-            setState(() => _currentStep--);
-          }
-        },
-        steps: [
-          Step(
-            title: const Text('Upload CSV'),
-            isActive: _currentStep >= 0,
-            state: _currentStep > 0 ? StepState.complete : StepState.indexed,
-            content: _buildStep1UploadCSV(),
+    return Consumer<CoordinatorProvider>(
+      builder: (context, provider, child) {
+        final school = provider.selectedSchool;
+
+        if (school == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Upload Students')),
+            body: const Center(child: Text('No school selected')),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Upload Students')),
+          body: Stepper(
+            currentStep: _currentStep,
+            onStepTapped: (step) {
+              if (step < _currentStep) {
+                setState(() => _currentStep = step);
+              }
+            },
+            onStepContinue: () {
+              if (_currentStep == 0 && _parsedStudents != null) {
+                setState(() => _currentStep = 1);
+              } else if (_currentStep == 1 && _gradeLevelMapping != null) {
+                _applyMappingToStudents();
+              } else if (_currentStep == 2) {
+                _uploadStudents(context);
+              }
+            },
+            onStepCancel: () {
+              if (_currentStep > 0) {
+                setState(() => _currentStep--);
+              }
+            },
+            steps: [
+              Step(
+                title: const Text('Upload CSV'),
+                isActive: _currentStep >= 0,
+                state:
+                    _currentStep > 0 ? StepState.complete : StepState.indexed,
+                content: _buildStep1UploadCSV(context, school),
+              ),
+              Step(
+                title: const Text('Map Grades to Levels'),
+                isActive: _currentStep >= 1,
+                state:
+                    _currentStep > 1 ? StepState.complete : StepState.indexed,
+                content: _buildStep2MapGrades(),
+              ),
+              Step(
+                title: const Text('Confirm & Upload'),
+                isActive: _currentStep >= 2,
+                content: _buildStep3Confirm(provider),
+              ),
+            ],
           ),
-          Step(
-            title: const Text('Map Grades to Levels'),
-            isActive: _currentStep >= 1,
-            state: _currentStep > 1 ? StepState.complete : StepState.indexed,
-            content: _buildStep2MapGrades(),
-          ),
-          Step(
-            title: const Text('Confirm & Upload'),
-            isActive: _currentStep >= 2,
-            content: _buildStep3Confirm(),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildStep1UploadCSV() {
+  Widget _buildStep1UploadCSV(BuildContext context, school) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -424,16 +341,16 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Upload to: ${widget.school.name}',
+                  'Upload to: ${school.name}',
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('Required CSV columns (no Level column needed):'),
+                const Text('Required CSV columns:'),
                 const Text('• Name'),
-                const Text('• UID (schoolCode + number)'),
+                const Text('• UID'),
                 const Text('• Grade'),
                 const Text('• Division'),
               ],
@@ -442,7 +359,7 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
         ),
         const SizedBox(height: 16),
         ElevatedButton.icon(
-          onPressed: _isLoading ? null : _pickFile,
+          onPressed: () => _pickFile(context),
           icon: const Icon(Icons.upload_file),
           label: const Text('Select CSV File'),
         ),
@@ -525,7 +442,7 @@ class _UploadStudentsScreenV2State extends State<UploadStudentsScreen> {
     );
   }
 
-  Widget _buildStep3Confirm() {
+  Widget _buildStep3Confirm(CoordinatorProvider provider) {
     if (_parsedStudents == null) {
       return const Text('Please complete previous steps');
     }

@@ -1,48 +1,50 @@
-// lib/screens/coordinator/export_data_screen.dart
-import 'package:brainmoto_app/service/firebase_service.dart';
+// lib/screens/coordinator/export_data_screen_refactored.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'package:csv/csv.dart';
-import 'dart:convert';
-import '../../models/school_model.dart';
+import '../../providers/coordinator_provider.dart';
 import '../../models/assessment_model.dart';
 import '../../models/student_model.dart';
+import '../../service/firebase_service.dart';
 
-class ExportDataScreen extends StatefulWidget {
-  final SchoolModel school;
-
-  const ExportDataScreen({Key? key, required this.school}) : super(key: key);
+class ExportDataScreenRefactored extends StatefulWidget {
+  const ExportDataScreenRefactored({Key? key}) : super(key: key);
 
   @override
-  State<ExportDataScreen> createState() => _ExportDataScreenState();
+  State<ExportDataScreenRefactored> createState() =>
+      _ExportDataScreenRefactoredState();
 }
 
-class _ExportDataScreenState extends State<ExportDataScreen> {
-  String _exportType = 'school'; // 'school' or 'grade'
+class _ExportDataScreenRefactoredState
+    extends State<ExportDataScreenRefactored> {
+  String _exportType = 'school';
   String? _selectedGrade;
   bool _isLoading = false;
 
-  Future<void> _exportData() async {
+  Future<void> _exportData(BuildContext context) async {
+    final provider = Provider.of<CoordinatorProvider>(context, listen: false);
+    final school = provider.selectedSchool!;
+
+    if (_exportType == 'grade' && _selectedGrade == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a grade'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
     setState(() => _isLoading = true);
 
     try {
       List<AssessmentModel> assessments;
 
       if (_exportType == 'school') {
-        assessments =
-            await FirebaseService.getAssessmentsBySchool(widget.school.id);
+        assessments = await FirebaseService.getAssessmentsBySchool(school.id);
       } else {
-        if (_selectedGrade == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Please select a grade'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-          setState(() => _isLoading = false);
-          return;
-        }
         assessments = await FirebaseService.getAssessmentsBySchoolAndGrade(
-          widget.school.id,
+          school.id,
           _selectedGrade!,
         );
       }
@@ -62,8 +64,6 @@ class _ExportDataScreenState extends State<ExportDataScreen> {
       // Generate CSV
       final csvData = _generateCSV(assessments, studentsMap);
 
-      // For web/mobile download, you would use platform-specific methods
-      // For now, showing the data
       if (mounted) {
         showDialog(
           context: context,
@@ -137,82 +137,83 @@ class _ExportDataScreenState extends State<ExportDataScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Export Assessment Data'),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text(
-              'Export Type',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            RadioListTile<String>(
-              title: const Text('Entire School'),
-              value: 'school',
-              groupValue: _exportType,
-              onChanged: (value) {
-                setState(() {
-                  _exportType = value!;
-                  _selectedGrade = null;
-                });
-              },
-            ),
-            RadioListTile<String>(
-              title: const Text('Specific Grade'),
-              value: 'grade',
-              groupValue: _exportType,
-              onChanged: (value) {
-                setState(() {
-                  _exportType = value!;
-                });
-              },
-            ),
-            if (_exportType == 'grade') ...[
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _selectedGrade,
-                decoration: const InputDecoration(
-                  labelText: 'Select Grade',
+    return Consumer<CoordinatorProvider>(
+      builder: (context, provider, child) {
+        final school = provider.selectedSchool;
+
+        if (school == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Export Assessment Data')),
+            body: const Center(child: Text('No school selected')),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(title: const Text('Export Assessment Data')),
+          body: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Export Type',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                 ),
-                items: widget.school.gradeToLevelMap.keys
-                    .map((grade) => DropdownMenuItem(
-                          value: grade,
-                          child: Text(grade),
-                        ))
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedGrade = value;
-                  });
-                },
-              ),
-            ],
-            const Spacer(),
-            ElevatedButton.icon(
-              onPressed: _isLoading ? null : _exportData,
-              icon: _isLoading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        color: Colors.white,
-                        strokeWidth: 2,
-                      ),
-                    )
-                  : const Icon(Icons.download),
-              label: const Text('Generate & Download CSV'),
+                const SizedBox(height: 8),
+                RadioListTile<String>(
+                  title: const Text('Entire School'),
+                  value: 'school',
+                  groupValue: _exportType,
+                  onChanged: (value) {
+                    setState(() {
+                      _exportType = value!;
+                      _selectedGrade = null;
+                    });
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Specific Grade'),
+                  value: 'grade',
+                  groupValue: _exportType,
+                  onChanged: (value) {
+                    setState(() => _exportType = value!);
+                  },
+                ),
+                if (_exportType == 'grade') ...[
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    value: _selectedGrade,
+                    decoration:
+                        const InputDecoration(labelText: 'Select Grade'),
+                    items: provider.availableGrades
+                        .map((grade) => DropdownMenuItem(
+                              value: grade,
+                              child: Text(grade),
+                            ))
+                        .toList(),
+                    onChanged: (value) {
+                      setState(() => _selectedGrade = value);
+                    },
+                  ),
+                ],
+                const Spacer(),
+                ElevatedButton.icon(
+                  onPressed: _isLoading ? null : () => _exportData(context),
+                  icon: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                              color: Colors.white, strokeWidth: 2),
+                        )
+                      : const Icon(Icons.download),
+                  label: const Text('Generate & Download CSV'),
+                ),
+              ],
             ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }

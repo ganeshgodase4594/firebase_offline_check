@@ -1,220 +1,45 @@
-// lib/screens/coordinator/academic_year_management_screen.dart
-import 'package:brainmoto_app/service/firebase_service_extension.dart';
+// lib/screens/coordinator/academic_year_management_refactored.dart
 import 'package:flutter/material.dart';
-import '../../models/school_model.dart';
+import 'package:provider/provider.dart';
+import '../../providers/coordinator_provider.dart';
 import '../../models/academic_config_model.dart';
 
-class AcademicYearManagementScreen extends StatefulWidget {
-  final SchoolModel school;
-
-  const AcademicYearManagementScreen({super.key, required this.school});
-
-  @override
-  State<AcademicYearManagementScreen> createState() =>
-      _AcademicYearManagementScreenState();
-}
-
-class _AcademicYearManagementScreenState
-    extends State<AcademicYearManagementScreen> {
-  AcademicConfigModel? _currentConfig;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadCurrentConfig();
-  }
-
-  Future<void> _loadCurrentConfig() async {
-    setState(() => _isLoading = true);
-
-    final config =
-        await FirebaseServiceExtensions.getAcademicConfig(widget.school.id);
-
-    setState(() {
-      _currentConfig = config;
-      _isLoading = false;
-    });
-  }
-
-  Future<void> _createNewAcademicYear() async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => _NewAcademicYearDialog(),
-    );
-
-    if (result == null) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      final config = AcademicConfigModel(
-        id: '',
-        schoolId: widget.school.id,
-        currentYear: result['year'],
-        currentTerm: 'Term 1',
-        yearStartDate: result['startDate'],
-        yearEndDate: result['endDate'],
-        term1EndDate: result['term1EndDate'],
-        isActive: true,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
-      await FirebaseServiceExtensions.createAcademicConfig(config);
-      await _loadCurrentConfig();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Academic year created successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _switchToTerm2() async {
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Switch to Term 2'),
-        content: const Text(
-          'Are you sure you want to switch to Term 2?\n\n'
-          'This will affect all new assessments submitted by teachers.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Switch to Term 2'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true || _currentConfig == null) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await FirebaseServiceExtensions.updateAcademicConfig(
-        _currentConfig!.id,
-        {'currentTerm': 'Term 2'},
-      );
-      await _loadCurrentConfig();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Switched to Term 2 successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _archiveCurrentYear() async {
-    if (_currentConfig == null) return;
-
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Archive Academic Year'),
-        content: const Text(
-          'This will:\n'
-          '• Move all assessment data to archive\n'
-          '• Clear active assessments for this year\n'
-          '• Prepare system for new academic year\n\n'
-          'This action cannot be undone. Continue?',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Archive Year'),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm != true) return;
-
-    setState(() => _isLoading = true);
-
-    try {
-      await FirebaseServiceExtensions.archiveAcademicYearData(
-        widget.school.id,
-        _currentConfig!.currentYear,
-      );
-
-      // Deactivate current config
-      await FirebaseServiceExtensions.updateAcademicConfig(
-        _currentConfig!.id,
-        {'isActive': false},
-      );
-
-      await _loadCurrentConfig();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Academic year archived successfully!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
-        );
-      }
-    } finally {
-      setState(() => _isLoading = false);
-    }
-  }
+class AcademicYearManagementRefactored extends StatelessWidget {
+  const AcademicYearManagementRefactored({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Academic Year Management'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _currentConfig == null
-              ? _buildNoConfigView()
-              : _buildConfigView(),
+    return Consumer<CoordinatorProvider>(
+      builder: (context, provider, child) {
+        final school = provider.selectedSchool;
+        final config = provider.academicConfig;
+
+        if (school == null) {
+          return Scaffold(
+            appBar: AppBar(title: const Text('Academic Year Management')),
+            body: const Center(child: Text('No school selected')),
+          );
+        }
+
+        return Scaffold(
+          appBar: AppBar(
+            title: const Text('Academic Year Management'),
+          ),
+          body: provider.isLoading || provider.isLoadingConfig
+              ? const Center(child: CircularProgressIndicator())
+              : config == null
+                  ? _buildNoConfigView(context, provider, school.id)
+                  : _buildConfigView(context, provider, config, school.id),
+        );
+      },
     );
   }
 
-  Widget _buildNoConfigView() {
+  Widget _buildNoConfigView(
+    BuildContext context,
+    CoordinatorProvider provider,
+    String schoolId,
+  ) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -232,7 +57,8 @@ class _AcademicYearManagementScreenState
           ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: _createNewAcademicYear,
+            onPressed: () =>
+                _createNewAcademicYear(context, provider, schoolId),
             icon: const Icon(Icons.add),
             label: const Text('Create Academic Year'),
           ),
@@ -241,8 +67,12 @@ class _AcademicYearManagementScreenState
     );
   }
 
-  Widget _buildConfigView() {
-    final config = _currentConfig!;
+  Widget _buildConfigView(
+    BuildContext context,
+    CoordinatorProvider provider,
+    AcademicConfigModel config,
+    String schoolId,
+  ) {
     final isTerm1 = config.currentTerm == 'Term 1';
 
     return ListView(
@@ -299,7 +129,7 @@ class _AcademicYearManagementScreenState
                   ),
                   const SizedBox(height: 12),
                   ElevatedButton.icon(
-                    onPressed: _switchToTerm2,
+                    onPressed: () => _switchToTerm2(context, provider, config),
                     icon: const Icon(Icons.navigate_next),
                     label: const Text('Switch to Term 2'),
                     style: ElevatedButton.styleFrom(
@@ -348,7 +178,8 @@ class _AcademicYearManagementScreenState
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: _archiveCurrentYear,
+                  onPressed: () =>
+                      _archiveCurrentYear(context, provider, config, schoolId),
                   icon: const Icon(Icons.archive),
                   label: const Text('Archive Current Year'),
                   style: OutlinedButton.styleFrom(
@@ -413,19 +244,166 @@ class _AcademicYearManagementScreenState
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
+
+  Future<void> _createNewAcademicYear(
+    BuildContext context,
+    CoordinatorProvider provider,
+    String schoolId,
+  ) async {
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) => const _NewAcademicYearDialog(),
+    );
+
+    if (result == null) return;
+
+    try {
+      final config = AcademicConfigModel(
+        id: '',
+        schoolId: schoolId,
+        currentYear: result['year'],
+        currentTerm: 'Term 1',
+        yearStartDate: result['startDate'],
+        yearEndDate: result['endDate'],
+        term1EndDate: result['term1EndDate'],
+        isActive: true,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      await provider.createAcademicConfig(config);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Academic year created successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _switchToTerm2(
+    BuildContext context,
+    CoordinatorProvider provider,
+    AcademicConfigModel config,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Switch to Term 2'),
+        content: const Text(
+          'Are you sure you want to switch to Term 2?\n\n'
+          'This will affect all new assessments submitted by teachers.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Switch to Term 2'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await provider.updateAcademicConfig(config.id, {'currentTerm': 'Term 2'});
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Switched to Term 2 successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
+  Future<void> _archiveCurrentYear(
+    BuildContext context,
+    CoordinatorProvider provider,
+    AcademicConfigModel config,
+    String schoolId,
+  ) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Archive Academic Year'),
+        content: const Text(
+          'This will:\n'
+          '• Move all assessment data to archive\n'
+          '• Clear active assessments for this year\n'
+          '• Prepare system for new academic year\n\n'
+          'This action cannot be undone. Continue?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Archive Year'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    try {
+      await provider.archiveAcademicYear(schoolId, config.currentYear);
+
+      // Deactivate current config
+      await provider.updateAcademicConfig(config.id, {'isActive': false});
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Academic year archived successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
 }
 
-// ============================================
-// NEW ACADEMIC YEAR DIALOG
-// ============================================
-
+// New Academic Year Dialog
 class _NewAcademicYearDialog extends StatefulWidget {
+  const _NewAcademicYearDialog();
+
   @override
   State<_NewAcademicYearDialog> createState() => _NewAcademicYearDialogState();
 }
 
 class _NewAcademicYearDialogState extends State<_NewAcademicYearDialog> {
-  final _formKey = GlobalKey<FormState>();
   DateTime? _startDate;
   DateTime? _endDate;
   DateTime? _term1EndDate;
@@ -463,55 +441,52 @@ class _NewAcademicYearDialogState extends State<_NewAcademicYearDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: const Text('Create New Academic Year'),
-      content: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              ListTile(
-                title: const Text('Year Start Date'),
-                subtitle: Text(_startDate != null
-                    ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
-                    : 'Not selected'),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () => _selectDate(context, 'start'),
-              ),
-              ListTile(
-                title: const Text('Year End Date'),
-                subtitle: Text(_endDate != null
-                    ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
-                    : 'Not selected'),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () => _selectDate(context, 'end'),
-              ),
-              ListTile(
-                title: const Text('Term 1 End Date (optional)'),
-                subtitle: Text(_term1EndDate != null
-                    ? '${_term1EndDate!.day}/${_term1EndDate!.month}/${_term1EndDate!.year}'
-                    : 'Not selected'),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: () => _selectDate(context, 'term1End'),
-              ),
-              if (_year != null)
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      'Academic Year: $_year',
-                      style: const TextStyle(fontWeight: FontWeight.bold),
-                      textAlign: TextAlign.center,
-                    ),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            ListTile(
+              title: const Text('Year Start Date'),
+              subtitle: Text(_startDate != null
+                  ? '${_startDate!.day}/${_startDate!.month}/${_startDate!.year}'
+                  : 'Not selected'),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () => _selectDate(context, 'start'),
+            ),
+            ListTile(
+              title: const Text('Year End Date'),
+              subtitle: Text(_endDate != null
+                  ? '${_endDate!.day}/${_endDate!.month}/${_endDate!.year}'
+                  : 'Not selected'),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () => _selectDate(context, 'end'),
+            ),
+            ListTile(
+              title: const Text('Term 1 End Date (optional)'),
+              subtitle: Text(_term1EndDate != null
+                  ? '${_term1EndDate!.day}/${_term1EndDate!.month}/${_term1EndDate!.year}'
+                  : 'Not selected'),
+              trailing: const Icon(Icons.calendar_today),
+              onTap: () => _selectDate(context, 'term1End'),
+            ),
+            if (_year != null)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.green[50],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Academic Year: $_year',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
                   ),
                 ),
-            ],
-          ),
+              ),
+          ],
         ),
       ),
       actions: [

@@ -1,573 +1,19 @@
-// // lib/screens/teacher/assessment_by_student_screen.dart
-// import 'package:brainmoto_app/service/firebase_service.dart';
-// import 'package:brainmoto_app/service/offline_service.dart';
-// import 'package:flutter/material.dart';
-// import 'package:provider/provider.dart';
-// import 'dart:async';
-
-// import '../../models/student_model.dart';
-// import '../../models/assessment_model.dart';
-// import '../../models/assessment_question_model.dart';
-
-// import '../../providers/auth_provider.dart';
-// import '../../providers/connectivity_provider.dart';
-
-// class AssessmentByStudentScreen extends StatefulWidget {
-//   final List<StudentModel> students;
-//   final String grade;
-
-//   const AssessmentByStudentScreen({
-//     Key? key,
-//     required this.students,
-//     required this.grade,
-//   }) : super(key: key);
-
-//   @override
-//   State<AssessmentByStudentScreen> createState() =>
-//       _AssessmentByStudentScreenState();
-// }
-
-// class _AssessmentByStudentScreenState extends State<AssessmentByStudentScreen> {
-//   int _currentStudentIndex = 0;
-//   List<AssessmentQuestionModel> _questions = [];
-//   Map<String, dynamic> _responses = {};
-//   bool _isLoading = true;
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     _loadQuestions();
-//   }
-
-//   Future<void> _loadQuestions() async {
-//     setState(() => _isLoading = true);
-
-//     final student = widget.students[_currentStudentIndex];
-//     _questions = await FirebaseService.getQuestionsByLevel(student.level);
-
-//     setState(() => _isLoading = false);
-//   }
-
-//   Future<void> _markAbsent() async {
-//     final student = widget.students[_currentStudentIndex];
-//     await FirebaseService.markStudentAbsent(student.id, true);
-
-//     if (mounted) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         SnackBar(content: Text('${student.name} marked as absent')),
-//       );
-//       _nextStudent();
-//     }
-//   }
-
-//   Future<void> _markLeftSchool() async {
-//     final confirmed = await showDialog<bool>(
-//       context: context,
-//       builder: (context) => AlertDialog(
-//         title: const Text('Confirm Removal'),
-//         content: const Text(
-//             'Are you sure this student has left the school? This action cannot be undone.'),
-//         actions: [
-//           TextButton(
-//             onPressed: () => Navigator.pop(context, false),
-//             child: const Text('Cancel'),
-//           ),
-//           TextButton(
-//             onPressed: () => Navigator.pop(context, true),
-//             child: const Text('Confirm', style: TextStyle(color: Colors.red)),
-//           ),
-//         ],
-//       ),
-//     );
-
-//     if (confirmed == true) {
-//       final student = widget.students[_currentStudentIndex];
-//       await FirebaseService.markStudentLeftSchool(student.id);
-
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(content: Text('${student.name} removed from school')),
-//         );
-//         _nextStudent();
-//       }
-//     }
-//   }
-
-//   void _nextStudent() {
-//     if (_currentStudentIndex < widget.students.length - 1) {
-//       setState(() {
-//         _currentStudentIndex++;
-//         _responses.clear();
-//       });
-//       _loadQuestions();
-//     } else {
-//       Navigator.pop(context);
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(content: Text('All students assessed!')),
-//       );
-//     }
-//   }
-
-//   Future<void> _saveAssessment() async {
-//     // Validate all responses
-//     if (_responses.length != _questions.length) {
-//       ScaffoldMessenger.of(context).showSnackBar(
-//         const SnackBar(
-//           content: Text('Please complete all assessments'),
-//           backgroundColor: Colors.red,
-//         ),
-//       );
-//       return;
-//     }
-
-//     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-//     final connectivity =
-//         Provider.of<ConnectivityProvider>(context, listen: false);
-//     final student = widget.students[_currentStudentIndex];
-
-//     final assessment = AssessmentModel(
-//       id: '',
-//       studentId: student.id,
-//       teacherId: authProvider.currentUser!.uid,
-//       schoolId: student.schoolId,
-//       level: student.level,
-//       responses: _responses,
-//       assessmentDate: DateTime.now(),
-//       isSynced: connectivity.isOnline,
-//       assessmentType: 'by_student',
-//     );
-
-//     try {
-//       if (connectivity.isOnline) {
-//         await FirebaseService.createAssessment(assessment);
-//         if (mounted) {
-//           ScaffoldMessenger.of(context).showSnackBar(
-//             const SnackBar(
-//               content: Text('Assessment saved and synced!'),
-//               backgroundColor: Colors.green,
-//             ),
-//           );
-//         }
-//       } else {
-//         await OfflineService.saveAssessmentOffline(assessment);
-//         await connectivity.updatePendingCount();
-//         if (mounted) {
-//           ScaffoldMessenger.of(context).showSnackBar(
-//             const SnackBar(
-//               content: Text('Assessment saved locally. Will sync when online.'),
-//               backgroundColor: Colors.orange,
-//             ),
-//           );
-//         }
-//       }
-
-//       _nextStudent();
-//     } catch (e) {
-//       if (mounted) {
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           SnackBar(
-//             content: Text('Error saving assessment: $e'),
-//             backgroundColor: Colors.red,
-//           ),
-//         );
-//       }
-//     }
-//   }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     if (_isLoading) {
-//       return Scaffold(
-//         appBar: AppBar(title: const Text('Loading...')),
-//         body: const Center(child: CircularProgressIndicator()),
-//       );
-//     }
-
-//     final student = widget.students[_currentStudentIndex];
-
-//     return Scaffold(
-//       appBar: AppBar(
-//         title: Text(
-//             'Assess Student ${_currentStudentIndex + 1}/${widget.students.length}'),
-//       ),
-//       body: Column(
-//         children: [
-//           // Student Info Card
-//           Card(
-//             margin: const EdgeInsets.all(16),
-//             child: Padding(
-//               padding: const EdgeInsets.all(16),
-//               child: Row(
-//                 children: [
-//                   CircleAvatar(
-//                     radius: 30,
-//                     backgroundColor: const Color(0xFF4e3f8a),
-//                     child: Text(
-//                       student.name[0],
-//                       style: const TextStyle(fontSize: 24, color: Colors.white),
-//                     ),
-//                   ),
-//                   const SizedBox(width: 16),
-//                   Expanded(
-//                     child: Column(
-//                       crossAxisAlignment: CrossAxisAlignment.start,
-//                       children: [
-//                         Text(
-//                           student.name,
-//                           style: const TextStyle(
-//                             fontSize: 18,
-//                             fontWeight: FontWeight.bold,
-//                           ),
-//                         ),
-//                         Text('${student.grade} - ${student.division}'),
-//                         Text('Level ${student.level}'),
-//                       ],
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//             ),
-//           ),
-
-//           // Action Buttons
-//           Padding(
-//             padding: const EdgeInsets.symmetric(horizontal: 16),
-//             child: Row(
-//               children: [
-//                 Expanded(
-//                   child: OutlinedButton.icon(
-//                     onPressed: _markAbsent,
-//                     icon: const Icon(Icons.block, size: 18),
-//                     label: const Text('Mark Absent'),
-//                     style: OutlinedButton.styleFrom(
-//                       foregroundColor: Colors.orange,
-//                     ),
-//                   ),
-//                 ),
-//                 const SizedBox(width: 8),
-//                 Expanded(
-//                   child: OutlinedButton.icon(
-//                     onPressed: _markLeftSchool,
-//                     icon: const Icon(Icons.person_remove, size: 18),
-//                     label: const Text('Left School'),
-//                     style: OutlinedButton.styleFrom(
-//                       foregroundColor: Colors.red,
-//                     ),
-//                   ),
-//                 ),
-//               ],
-//             ),
-//           ),
-
-//           // Questions List
-//           Expanded(
-//             child: ListView.builder(
-//               padding: const EdgeInsets.all(16),
-//               itemCount: _questions.length,
-//               itemBuilder: (context, index) {
-//                 return QuestionCard(
-//                   question: _questions[index],
-//                   questionNumber: index,
-//                   onScoreChanged: (score) {
-//                     setState(() {
-//                       _responses['response$index'] = score;
-//                     });
-//                   },
-//                   initialValue: _responses['response$index'],
-//                 );
-//               },
-//             ),
-//           ),
-
-//           // Save Button
-//           Padding(
-//             padding: const EdgeInsets.all(16),
-//             child: SizedBox(
-//               width: double.infinity,
-//               child: ElevatedButton(
-//                 onPressed: _saveAssessment,
-//                 style: ElevatedButton.styleFrom(
-//                   padding: const EdgeInsets.symmetric(vertical: 16),
-//                 ),
-//                 child: const Text(
-//                   'Save & Next Student',
-//                   style: TextStyle(fontSize: 18),
-//                 ),
-//               ),
-//             ),
-//           ),
-//         ],
-//       ),
-//     );
-//   }
-// }
-
-// class QuestionCard extends StatefulWidget {
-//   final AssessmentQuestionModel question;
-//   final int questionNumber;
-//   final Function(dynamic) onScoreChanged;
-//   final dynamic initialValue;
-
-//   const QuestionCard({
-//     Key? key,
-//     required this.question,
-//     required this.questionNumber,
-//     required this.onScoreChanged,
-//     this.initialValue,
-//   }) : super(key: key);
-
-//   @override
-//   State<QuestionCard> createState() => _QuestionCardState();
-// }
-
-// class _QuestionCardState extends State<QuestionCard> {
-//   late TextEditingController _controller;
-//   Timer? _timer;
-//   int _seconds = 0;
-//   bool _isTimerRunning = false;
-
-//   @override
-//   void initState() {
-//     super.initState();
-//     _controller = TextEditingController(
-//       text: widget.initialValue?.toString() ?? '',
-//     );
-//   }
-
-//   @override
-//   void dispose() {
-//     _controller.dispose();
-//     _timer?.cancel();
-//     super.dispose();
-//   }
-
-//   void _startTimer() {
-//     setState(() {
-//       _seconds = 0;
-//       _isTimerRunning = true;
-//     });
-
-//     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-//       setState(() {
-//         _seconds++;
-//       });
-//     });
-//   }
-
-//   void _stopTimer() {
-//     _timer?.cancel();
-//     setState(() {
-//       _isTimerRunning = false;
-//       _controller.text = _seconds.toString();
-//       widget.onScoreChanged(_seconds);
-//     });
-//   }
-
-//   void _startCountdown(int duration) async {
-//     setState(() {
-//       _seconds = duration;
-//       _isTimerRunning = true;
-//     });
-
-//     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-//       if (_seconds > 0) {
-//         setState(() {
-//           _seconds--;
-//         });
-//       } else {
-//         _stopTimer();
-//         // Vibrate and alert
-//         ScaffoldMessenger.of(context).showSnackBar(
-//           const SnackBar(
-//             content: Text('Time\'s up!'),
-//             duration: Duration(seconds: 1),
-//             backgroundColor: Colors.green,
-//           ),
-//         );
-//       }
-//     });
-//   }
-
-//   // Future<void> _showVideoHelp() async {
-//   //   if (widget.question.videoUrl != null) {
-//   //     final Uri url = Uri.parse(widget.question.videoUrl!);
-//   //     if (await canLaunchUrl(url)) {
-//   //       await launchUrl(url, mode: LaunchMode.externalApplication);
-//   //     }
-//   //   }
-//   // }
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Card(
-//       margin: const EdgeInsets.only(bottom: 16),
-//       child: Padding(
-//         padding: const EdgeInsets.all(16),
-//         child: Column(
-//           crossAxisAlignment: CrossAxisAlignment.start,
-//           children: [
-//             // Question Header
-//             Row(
-//               children: [
-//                 Expanded(
-//                   child: Text(
-//                     'Q${widget.questionNumber + 1}: ${widget.question.questionText}',
-//                     style: const TextStyle(
-//                       fontSize: 16,
-//                       fontWeight: FontWeight.bold,
-//                     ),
-//                   ),
-//                 ),
-//                 if (widget.question.videoUrl != null)
-//                   IconButton(
-//                     icon: const Icon(Icons.info_outline,
-//                         color: Color(0xFF4e3f8a)),
-//                     onPressed: null,
-//                     tooltip: 'Watch demo video',
-//                   ),
-//               ],
-//             ),
-//             const SizedBox(height: 12),
-
-//             // Timer Controls (for seconds type)
-//             if (widget.question.inputType == 'seconds') ...[
-//               Row(
-//                 children: [
-//                   Expanded(
-//                     child: ElevatedButton.icon(
-//                       onPressed: _isTimerRunning ? null : _startTimer,
-//                       icon: const Icon(Icons.play_arrow),
-//                       label: const Text('Start Stopwatch'),
-//                     ),
-//                   ),
-//                   const SizedBox(width: 8),
-//                   ElevatedButton.icon(
-//                     onPressed: _isTimerRunning ? _stopTimer : null,
-//                     icon: const Icon(Icons.stop),
-//                     label: const Text('Stop'),
-//                     style: ElevatedButton.styleFrom(
-//                       backgroundColor: Colors.red,
-//                     ),
-//                   ),
-//                 ],
-//               ),
-//               const SizedBox(height: 8),
-
-//               // Preset countdown buttons
-//               if (widget.question.presetTimer != null)
-//                 Row(
-//                   children: [
-//                     TextButton(
-//                       onPressed: () => _startCountdown(30),
-//                       child: const Text('30s'),
-//                     ),
-//                     TextButton(
-//                       onPressed: () => _startCountdown(60),
-//                       child: const Text('60s'),
-//                     ),
-//                     TextButton(
-//                       onPressed: () => _startCountdown(90),
-//                       child: const Text('90s'),
-//                     ),
-//                   ],
-//                 ),
-
-//               if (_isTimerRunning)
-//                 Center(
-//                   child: Text(
-//                     _seconds.toString(),
-//                     style: const TextStyle(
-//                       fontSize: 48,
-//                       fontWeight: FontWeight.bold,
-//                       color: Color(0xFF4e3f8a),
-//                     ),
-//                   ),
-//                 ),
-//               const SizedBox(height: 12),
-//             ],
-
-//             // Score Input
-//             Row(
-//               children: [
-//                 Expanded(
-//                   child: TextField(
-//                     controller: _controller,
-//                     keyboardType: widget.question.inputType == 'integer'
-//                         ? TextInputType.number
-//                         : const TextInputType.numberWithOptions(decimal: true),
-//                     decoration: InputDecoration(
-//                       labelText: 'Score',
-//                       suffixText:
-//                           widget.question.inputType == 'seconds' ? 'sec' : '',
-//                       border: const OutlineInputBorder(),
-//                     ),
-//                     onChanged: (value) {
-//                       final score = widget.question.inputType == 'integer'
-//                           ? int.tryParse(value)
-//                           : double.tryParse(value);
-//                       widget.onScoreChanged(score);
-//                     },
-//                   ),
-//                 ),
-//                 const SizedBox(width: 8),
-//                 // Stepper buttons
-//                 Column(
-//                   children: [
-//                     IconButton(
-//                       onPressed: () {
-//                         final current = int.tryParse(_controller.text) ?? 0;
-//                         _controller.text = (current + 1).toString();
-//                         widget.onScoreChanged(current + 1);
-//                       },
-//                       icon: const Icon(Icons.arrow_drop_up),
-//                       style: IconButton.styleFrom(
-//                         backgroundColor: Colors.grey[200],
-//                       ),
-//                     ),
-//                     IconButton(
-//                       onPressed: () {
-//                         final current = int.tryParse(_controller.text) ?? 0;
-//                         if (current > 0) {
-//                           _controller.text = (current - 1).toString();
-//                           widget.onScoreChanged(current - 1);
-//                         }
-//                       },
-//                       icon: const Icon(Icons.arrow_drop_down),
-//                       style: IconButton.styleFrom(
-//                         backgroundColor: Colors.grey[200],
-//                       ),
-//                     ),
-//                   ],
-//                 ),
-//               ],
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }
-
-// lib/screens/teacher/assessment_by_student_screen_v2.dart
+// lib/screens/teacher/assessment_by_student_screen_refactored.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-
 import '../../models/student_model.dart';
-import '../../models/assessment_model.dart';
-import '../../models/assessment_question_model.dart';
 import '../../models/academic_config_model.dart';
+import '../../providers/assessment_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/connectivity_provider.dart';
-import '../../service/firebase_service.dart';
-import '../../service/offline_service.dart';
 
-class AssessmentByStudentScreenV2 extends StatefulWidget {
+class AssessmentByStudentScreenRefactored extends StatelessWidget {
   final List<StudentModel> students;
   final String grade;
   final AcademicConfigModel academicConfig;
 
-  const AssessmentByStudentScreenV2({
+  const AssessmentByStudentScreenRefactored({
     Key? key,
     required this.students,
     required this.grade,
@@ -575,51 +21,257 @@ class AssessmentByStudentScreenV2 extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<AssessmentByStudentScreenV2> createState() =>
-      _AssessmentByStudentScreenV2State();
+  Widget build(BuildContext context) {
+    return ChangeNotifierProvider(
+      create: (_) {
+        final provider = AssessmentProvider();
+        provider.initializeAssessment(
+          students: students,
+          level: students.first.level,
+          academicConfig: academicConfig,
+        );
+        return provider;
+      },
+      child: const _AssessmentContent(),
+    );
+  }
 }
 
-class _AssessmentByStudentScreenV2State
-    extends State<AssessmentByStudentScreenV2> {
-  int _currentStudentIndex = 0;
-  List<AssessmentQuestionModel> _questions = [];
-  Map<String, dynamic> _responses = {};
-  bool _isLoading = true;
+class _AssessmentContent extends StatelessWidget {
+  const _AssessmentContent();
 
   @override
-  void initState() {
-    super.initState();
-    _loadQuestions();
-  }
+  Widget build(BuildContext context) {
+    final provider = context.watch<AssessmentProvider>();
 
-  Future<void> _loadQuestions() async {
-    setState(() => _isLoading = true);
-
-    final student = widget.students[_currentStudentIndex];
-    _questions = await FirebaseService.getQuestionsByLevel(student.level);
-
-    setState(() => _isLoading = false);
-  }
-
-  Future<void> _markAbsent() async {
-    final student = widget.students[_currentStudentIndex];
-    await FirebaseService.markStudentAbsent(student.id, true);
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${student.name} marked as absent')),
+    if (provider.isLoading) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Loading...')),
+        body: const Center(child: CircularProgressIndicator()),
       );
-      _nextStudent();
+    }
+
+    if (provider.errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Error')),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text('Error: ${provider.errorMessage}'),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Go Back'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Assess Student ${provider.currentStudentIndex + 1}/${provider.students.length}',
+        ),
+      ),
+      body: Column(
+        children: [
+          _buildAcademicYearBanner(context),
+          _buildStudentCard(context),
+          _buildActionButtons(context),
+          Expanded(child: _buildQuestionsList(context)),
+          _buildSaveButton(context),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAcademicYearBanner(BuildContext context) {
+    final config = context.select<AssessmentProvider, AcademicConfigModel?>(
+      (p) => p.academicConfig,
+    );
+
+    if (config == null) return const SizedBox.shrink();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(8),
+      color: Colors.blue[50],
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(Icons.calendar_today, size: 16, color: Colors.blue),
+          const SizedBox(width: 8),
+          Text(
+            '${config.currentYear} • ${config.currentTerm}',
+            style: const TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudentCard(BuildContext context) {
+    return Consumer<AssessmentProvider>(
+      builder: (context, provider, child) {
+        final student = provider.currentStudent;
+        if (student == null) return const SizedBox.shrink();
+
+        return Card(
+          margin: const EdgeInsets.all(16),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 30,
+                  backgroundColor: const Color(0xFF4e3f8a),
+                  child: Text(
+                    student.name[0],
+                    style: const TextStyle(fontSize: 24, color: Colors.white),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        student.name,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text('UID: ${student.uid}'),
+                      Text('${student.grade} - ${student.division}'),
+                      Text('Level ${student.level}'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildActionButtons(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _markAbsent(context),
+              icon: const Icon(Icons.block, size: 18),
+              label: const Text('Mark Absent'),
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.orange),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _markLeftSchool(context),
+              icon: const Icon(Icons.person_remove, size: 18),
+              label: const Text('Left School'),
+              style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuestionsList(BuildContext context) {
+    return Consumer<AssessmentProvider>(
+      builder: (context, provider, child) {
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: provider.questions.length,
+          itemBuilder: (context, index) {
+            final question = provider.questions[index];
+            return _QuestionCard(
+              question: question,
+              questionNumber: index,
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildSaveButton(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: SizedBox(
+        width: double.infinity,
+        child: Consumer<AssessmentProvider>(
+          builder: (context, provider, child) {
+            return ElevatedButton(
+              onPressed: () => _saveAssessment(context),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+              ),
+              child: const Text(
+                'Save & Next Student',
+                style: TextStyle(fontSize: 18),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _markAbsent(BuildContext context) async {
+    final provider = context.read<AssessmentProvider>();
+    final student = provider.currentStudent;
+    if (student == null) return;
+
+    try {
+      await provider.markStudentAbsent(student.id);
+
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${student.name} marked as absent')),
+        );
+
+        if (provider.students.isEmpty) {
+          Navigator.pop(context);
+        } else {
+          // Auto-advance to next student
+          provider.nextStudent();
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+        );
+      }
     }
   }
 
-  Future<void> _markLeftSchool() async {
+  Future<void> _markLeftSchool(BuildContext context) async {
+    final provider = context.read<AssessmentProvider>();
+    final student = provider.currentStudent;
+    if (student == null) return;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Confirm Removal'),
-        content: const Text(
-            'Are you sure this student has left the school? This action cannot be undone.'),
+        content: Text(
+          'Are you sure ${student.name} has left the school?\n\n'
+          'This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -634,36 +286,17 @@ class _AssessmentByStudentScreenV2State
     );
 
     if (confirmed == true) {
-      final student = widget.students[_currentStudentIndex];
-      await FirebaseService.markStudentLeftSchool(student.id);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('${student.name} removed from school')),
-        );
-        _nextStudent();
-      }
+      // Handle left school logic
+      provider.nextStudent();
     }
   }
 
-  void _nextStudent() {
-    if (_currentStudentIndex < widget.students.length - 1) {
-      setState(() {
-        _currentStudentIndex++;
-        _responses.clear();
-      });
-      _loadQuestions();
-    } else {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('All students assessed!')),
-      );
-    }
-  }
+  Future<void> _saveAssessment(BuildContext context) async {
+    final provider = context.read<AssessmentProvider>();
+    final authProvider = context.read<AuthProvider>();
+    final connectivity = context.read<ConnectivityProvider>();
 
-  Future<void> _saveAssessment() async {
-    // Validate all responses
-    if (_responses.length != _questions.length) {
+    if (!provider.validateCurrentStudentResponses()) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Please complete all assessments'),
@@ -673,247 +306,71 @@ class _AssessmentByStudentScreenV2State
       return;
     }
 
-    final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    final connectivity =
-        Provider.of<ConnectivityProvider>(context, listen: false);
-    final student = widget.students[_currentStudentIndex];
-
-    // Create assessment with academic year and term
-    final assessment = AssessmentModel(
-      id: '',
-      studentId: student.id,
+    final success = await provider.saveCurrentAssessment(
       teacherId: authProvider.currentUser!.uid,
-      schoolId: student.schoolId,
-      level: student.level,
-      responses: _responses,
-      assessmentDate: DateTime.now(),
-      academicYear: widget.academicConfig.currentYear, // Auto-tagged
-      term: widget.academicConfig.currentTerm, // Auto-tagged
-      isSynced: connectivity.isOnline,
-      assessmentType: 'by_student',
+      isOnline: connectivity.isOnline,
     );
 
-    try {
-      if (connectivity.isOnline) {
-        await FirebaseService.createAssessment(assessment);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Assessment saved!\n${widget.academicConfig.currentYear} - ${widget.academicConfig.currentTerm}',
-              ),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        await OfflineService.saveAssessmentOffline(assessment);
-        await connectivity.updatePendingCount();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Assessment saved locally. Will sync when online.'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-      }
-
-      _nextStudent();
-    } catch (e) {
-      if (mounted) {
+    if (context.mounted) {
+      if (success) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error saving assessment: $e'),
+            content: Text(
+              connectivity.isOnline
+                  ? 'Assessment saved and synced!'
+                  : 'Assessment saved locally. Will sync when online.',
+            ),
+            backgroundColor:
+                connectivity.isOnline ? Colors.green : Colors.orange,
+          ),
+        );
+
+        if (provider.isLastStudent) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('All students assessed!')),
+          );
+        } else {
+          provider.nextStudent();
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: ${provider.errorMessage}'),
             backgroundColor: Colors.red,
           ),
         );
       }
     }
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    if (_isLoading) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Loading...')),
-        body: const Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    final student = widget.students[_currentStudentIndex];
-
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-            'Assess Student ${_currentStudentIndex + 1}/${widget.students.length}'),
-      ),
-      body: Column(
-        children: [
-          // Academic Year Banner
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            color: Colors.blue[50],
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.calendar_today, size: 16, color: Colors.blue),
-                const SizedBox(width: 8),
-                Text(
-                  '${widget.academicConfig.currentYear} • ${widget.academicConfig.currentTerm}',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.blue,
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Student Info Card
-          Card(
-            margin: const EdgeInsets.all(16),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: const Color(0xFF4e3f8a),
-                    child: Text(
-                      student.name[0],
-                      style: const TextStyle(fontSize: 24, color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          student.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text('UID: ${student.uid}'),
-                        Text('${student.grade} - ${student.division}'),
-                        Text('Level ${student.level}'),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Action Buttons
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _markAbsent,
-                    icon: const Icon(Icons.block, size: 18),
-                    label: const Text('Mark Absent'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.orange,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: _markLeftSchool,
-                    icon: const Icon(Icons.person_remove, size: 18),
-                    label: const Text('Left School'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.red,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-
-          // Questions List
-          Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _questions.length,
-              itemBuilder: (context, index) {
-                return QuestionCard(
-                  question: _questions[index],
-                  questionNumber: index,
-                  onScoreChanged: (score) {
-                    setState(() {
-                      _responses['response$index'] = score;
-                    });
-                  },
-                  initialValue: _responses['response$index'],
-                );
-              },
-            ),
-          ),
-
-          // Save Button
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _saveAssessment,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                child: const Text(
-                  'Save & Next Student',
-                  style: TextStyle(fontSize: 18),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+    await connectivity.updatePendingCount();
   }
 }
 
-// QuestionCard widget remains the same as before
-class QuestionCard extends StatefulWidget {
-  final AssessmentQuestionModel question;
+// Question Card with Timer
+class _QuestionCard extends StatefulWidget {
+  final dynamic question;
   final int questionNumber;
-  final Function(dynamic) onScoreChanged;
-  final dynamic initialValue;
 
-  const QuestionCard({
-    Key? key,
+  const _QuestionCard({
     required this.question,
     required this.questionNumber,
-    required this.onScoreChanged,
-    this.initialValue,
-  }) : super(key: key);
+  });
 
   @override
-  State<QuestionCard> createState() => _QuestionCardState();
+  State<_QuestionCard> createState() => _QuestionCardState();
 }
 
-class _QuestionCardState extends State<QuestionCard> {
+class _QuestionCardState extends State<_QuestionCard> {
   late TextEditingController _controller;
   Timer? _timer;
-  int _seconds = 0;
-  bool _isTimerRunning = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(
-      text: widget.initialValue?.toString() ?? '',
-    );
+    final provider = context.read<AssessmentProvider>();
+    final initial = provider.getCurrentResponse(widget.questionNumber);
+    _controller = TextEditingController(text: initial?.toString() ?? '');
   }
 
   @override
@@ -924,53 +381,27 @@ class _QuestionCardState extends State<QuestionCard> {
   }
 
   void _startTimer() {
-    setState(() {
-      _seconds = 0;
-      _isTimerRunning = true;
-    });
+    final provider = context.read<AssessmentProvider>();
+    provider.startTimer();
 
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      setState(() {
-        _seconds++;
-      });
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      provider.incrementTimer();
     });
   }
 
   void _stopTimer() {
     _timer?.cancel();
-    setState(() {
-      _isTimerRunning = false;
-      _controller.text = _seconds.toString();
-      widget.onScoreChanged(_seconds);
-    });
-  }
+    final provider = context.read<AssessmentProvider>();
+    provider.stopTimer();
 
-  void _startCountdown(int duration) async {
-    setState(() {
-      _seconds = duration;
-      _isTimerRunning = true;
-    });
-
-    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_seconds > 0) {
-        setState(() {
-          _seconds--;
-        });
-      } else {
-        _stopTimer();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Time\'s up!'),
-            duration: Duration(seconds: 1),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    });
+    _controller.text = provider.timerSeconds.toString();
+    provider.setCurrentResponse(widget.questionNumber, provider.timerSeconds);
   }
 
   @override
   Widget build(BuildContext context) {
+    final question = widget.question;
+
     return Card(
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -978,136 +409,113 @@ class _QuestionCardState extends State<QuestionCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Question Header
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    'Q${widget.questionNumber + 1}: ${widget.question.questionText}',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                if (widget.question.videoUrl != null)
-                  IconButton(
-                    icon: const Icon(Icons.info_outline,
-                        color: Color(0xFF4e3f8a)),
-                    onPressed: null,
-                    tooltip: 'Watch demo video',
-                  ),
-              ],
+            Text(
+              'Q${widget.questionNumber + 1}: ${question.questionText}',
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
 
-            // Timer Controls (for seconds type)
-            if (widget.question.inputType == 'seconds') ...[
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: _isTimerRunning ? null : _startTimer,
-                      icon: const Icon(Icons.play_arrow),
-                      label: const Text('Start Stopwatch'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  ElevatedButton.icon(
-                    onPressed: _isTimerRunning ? _stopTimer : null,
-                    icon: const Icon(Icons.stop),
-                    label: const Text('Stop'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.red,
-                    ),
-                  ),
-                ],
+            // Timer controls for seconds type
+            if (question.inputType == 'seconds') ...[
+              Consumer<AssessmentProvider>(
+                builder: (context, provider, child) {
+                  return Column(
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed:
+                                  provider.isTimerRunning ? null : _startTimer,
+                              icon: const Icon(Icons.play_arrow),
+                              label: const Text('Start'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton.icon(
+                            onPressed:
+                                provider.isTimerRunning ? _stopTimer : null,
+                            icon: const Icon(Icons.stop),
+                            label: const Text('Stop'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (provider.isTimerRunning) ...[
+                        const SizedBox(height: 16),
+                        Text(
+                          '${provider.timerSeconds}s',
+                          style: const TextStyle(
+                            fontSize: 48,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF4e3f8a),
+                          ),
+                        ),
+                      ],
+                    ],
+                  );
+                },
               ),
-              const SizedBox(height: 8),
-
-              // Preset countdown buttons
-              if (widget.question.presetTimer != null)
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () => _startCountdown(30),
-                      child: const Text('30s'),
-                    ),
-                    TextButton(
-                      onPressed: () => _startCountdown(60),
-                      child: const Text('60s'),
-                    ),
-                    TextButton(
-                      onPressed: () => _startCountdown(90),
-                      child: const Text('90s'),
-                    ),
-                  ],
-                ),
-
-              if (_isTimerRunning)
-                Center(
-                  child: Text(
-                    _seconds.toString(),
-                    style: const TextStyle(
-                      fontSize: 48,
-                      fontWeight: FontWeight.bold,
-                      color: Color(0xFF4e3f8a),
-                    ),
-                  ),
-                ),
               const SizedBox(height: 12),
             ],
 
-            // Score Input
+            // Score input
             Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _controller,
-                    keyboardType: widget.question.inputType == 'integer'
+                    keyboardType: question.inputType == 'integer'
                         ? TextInputType.number
                         : const TextInputType.numberWithOptions(decimal: true),
                     decoration: InputDecoration(
                       labelText: 'Score',
-                      suffixText:
-                          widget.question.inputType == 'seconds' ? 'sec' : '',
+                      suffixText: question.inputType == 'seconds' ? 'sec' : '',
                       border: const OutlineInputBorder(),
                     ),
                     onChanged: (value) {
-                      final score = widget.question.inputType == 'integer'
+                      final score = question.inputType == 'integer'
                           ? int.tryParse(value)
                           : double.tryParse(value);
-                      widget.onScoreChanged(score);
+                      context.read<AssessmentProvider>().setCurrentResponse(
+                            widget.questionNumber,
+                            score,
+                          );
                     },
                   ),
                 ),
                 const SizedBox(width: 8),
-                // Stepper buttons
                 Column(
                   children: [
                     IconButton(
                       onPressed: () {
                         final current = int.tryParse(_controller.text) ?? 0;
                         _controller.text = (current + 1).toString();
-                        widget.onScoreChanged(current + 1);
+                        context.read<AssessmentProvider>().setCurrentResponse(
+                              widget.questionNumber,
+                              current + 1,
+                            );
                       },
                       icon: const Icon(Icons.arrow_drop_up),
                       style: IconButton.styleFrom(
-                        backgroundColor: Colors.grey[200],
-                      ),
+                          backgroundColor: Colors.grey[200]),
                     ),
                     IconButton(
                       onPressed: () {
                         final current = int.tryParse(_controller.text) ?? 0;
                         if (current > 0) {
                           _controller.text = (current - 1).toString();
-                          widget.onScoreChanged(current - 1);
+                          context.read<AssessmentProvider>().setCurrentResponse(
+                                widget.questionNumber,
+                                current - 1,
+                              );
                         }
                       },
                       icon: const Icon(Icons.arrow_drop_down),
                       style: IconButton.styleFrom(
-                        backgroundColor: Colors.grey[200],
-                      ),
+                          backgroundColor: Colors.grey[200]),
                     ),
                   ],
                 ),

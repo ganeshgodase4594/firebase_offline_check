@@ -1,19 +1,27 @@
-// lib/main.dart
+// lib/main.dart - UPDATED with ALL providers
 import 'package:brainmoto_app/firebase_options.dart';
+import 'package:brainmoto_app/providers/coordinator_provider.dart';
+import 'package:brainmoto_app/screens/coordinator/school_detail_screen.dart';
 import 'package:brainmoto_app/screens/super-admin/super_admin_dashboard.dart';
+import 'package:brainmoto_app/screens/teacher/teacher_dashboard.dart';
 import 'package:brainmoto_app/service/firebase_service.dart';
 import 'package:brainmoto_app/service/offline_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 
+// ALL Providers
 import 'providers/auth_provider.dart';
 import 'providers/connectivity_provider.dart';
 import 'providers/app_provider.dart';
+import 'providers/student_provider.dart';
+import 'providers/teacher_provider.dart';
+import 'providers/school_provider.dart';
+import 'providers/question_provider.dart';
 
+// Screens
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
-import 'screens/teacher/teacher_dashboard.dart';
 import 'screens/coordinator/coordinator_dashboard.dart';
 
 void main() async {
@@ -44,9 +52,20 @@ class BrainmotoApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        // Core providers
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProvider(create: (_) => AppProvider()),
+
+        // Feature providers (available globally)
+        ChangeNotifierProvider(create: (_) => SchoolProvider()),
+        ChangeNotifierProvider(create: (_) => StudentProvider()),
+        ChangeNotifierProvider(create: (_) => TeacherProvider()),
+        ChangeNotifierProvider(create: (_) => QuestionProvider()),
+        ChangeNotifierProvider(
+            create: (_) => CoordinatorProvider()..loadSchools())
+
+        // Assessment provider created locally in assessment screens
       ],
       child: MaterialApp(
         title: 'Brainmoto MSAP',
@@ -84,9 +103,11 @@ class BrainmotoApp extends StatelessWidget {
         home: const SplashScreen(),
         routes: {
           '/login': (context) => const LoginScreen(),
-          '/teacher-dashboard': (context) => const TeacherDashboardV2(),
-          '/coordinator-dashboard': (context) => const CoordinatorDashboard(),
+          '/teacher-dashboard': (context) => const TeacherDashboardRefactored(),
+          '/coordinator-dashboard': (context) =>
+              const CoordinatorDashboardRefactored(),
           '/super-admin-dashboard': (context) => const SuperAdminDashboard(),
+          '/school-detail': (context) => const SchoolDetailScreenRefactored()
         },
       ),
     );
