@@ -1,4 +1,6 @@
 // lib/providers/coordinator_provider.dart
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import '../models/school_model.dart';
 import '../models/user_model.dart';
@@ -283,6 +285,7 @@ class CoordinatorProvider with ChangeNotifier {
         FirebaseService.getStudentsBySchoolStream(schoolId).listen(
       (students) {
         _students = students;
+        log("Student is : $students");
         notifyListeners();
       },
       onError: (error) {
@@ -394,6 +397,88 @@ class CoordinatorProvider with ChangeNotifier {
   // BULK UPLOAD
   // ========================================
 
+  // Future<void> uploadStudentsBatch(
+  //   List<StudentModel> students,
+  //   Map<String, int> gradeMapping,
+  // ) async {
+  //   if (_selectedSchool == null) return;
+
+  //   try {
+  //     _isUploadingData = true;
+  //     notifyListeners();
+
+  //     // Update school mapping
+  //     await FirebaseService.updateSchool(
+  //       _selectedSchool!.id,
+  //       {'gradeToLevelMap': gradeMapping},
+  //     );
+
+  //     // Create students
+  //     await FirebaseService.createStudentsBatch(students);
+
+  //     _isUploadingData = false;
+  //     notifyListeners();
+  //   } catch (e) {
+  //     _errorMessage = e.toString();
+  //     _isUploadingData = false;
+  //     notifyListeners();
+  //     rethrow;
+  //   }
+  // }
+
+  // Add this updated method to coordinator_provider.dart
+// Replace the existing uploadStudentsBatch method
+
+  // Future<void> uploadStudentsBatch(
+  //   List<StudentModel> students,
+  //   Map<String, int> gradeMapping,
+  // ) async {
+  //   if (_selectedSchool == null) return;
+
+  //   try {
+  //     _isUploadingData = true;
+  //     notifyListeners();
+
+  //     // CRITICAL FIX: Merge new mappings with existing ones
+  //     // Get current school mapping
+  //     final currentMapping =
+  //         Map<String, int>.from(_selectedSchool!.gradeToLevelMap);
+
+  //     // Merge with new mappings (only add new grades, don't overwrite existing)
+  //     final mergedMapping = Map<String, int>.from(currentMapping);
+
+  //     // Add only new grades from the gradeMapping parameter
+  //     gradeMapping.forEach((grade, level) {
+  //       if (!currentMapping.containsKey(grade)) {
+  //         // This is a new grade, add it
+  //         mergedMapping[grade] = level;
+  //       }
+  //       // If grade already exists in currentMapping, we keep the existing value
+  //     });
+
+  //     // Update school mapping with merged data
+  //     await FirebaseService.updateSchool(
+  //       _selectedSchool!.id,
+  //       {'gradeToLevelMap': mergedMapping},
+  //     );
+
+  //     // Create students - they already have correct levels from parsing
+  //     await FirebaseService.createStudentsBatch(students);
+
+  //     _isUploadingData = false;
+  //     notifyListeners();
+  //   } catch (e) {
+  //     _errorMessage = e.toString();
+  //     _isUploadingData = false;
+  //     notifyListeners();
+  //     rethrow;
+  //   }
+  // }
+
+  // ========================================
+  // BULK UPLOAD - FIXED VERSION
+  // ========================================
+
   Future<void> uploadStudentsBatch(
     List<StudentModel> students,
     Map<String, int> gradeMapping,
@@ -404,10 +489,30 @@ class CoordinatorProvider with ChangeNotifier {
       _isUploadingData = true;
       notifyListeners();
 
-      // Update school mapping
+      // CRITICAL FIX: Fetch fresh school data from Firestore
+      final freshSchool = await FirebaseService.getSchool(_selectedSchool!.id);
+      if (freshSchool == null) {
+        throw Exception('Could not fetch school data');
+      }
+
+      // Get current mapping from fresh data
+      final currentMapping = Map<String, int>.from(freshSchool.gradeToLevelMap);
+
+      // Merge with new mappings (only add new grades)
+      final mergedMapping = Map<String, int>.from(currentMapping);
+
+      gradeMapping.forEach((grade, level) {
+        if (!currentMapping.containsKey(grade)) {
+          // This is a new grade, add it
+          mergedMapping[grade] = level;
+        }
+        // If grade already exists, keep the existing value
+      });
+
+      // Update school mapping with merged data
       await FirebaseService.updateSchool(
         _selectedSchool!.id,
-        {'gradeToLevelMap': gradeMapping},
+        {'gradeToLevelMap': mergedMapping},
       );
 
       // Create students

@@ -1,4 +1,5 @@
 // lib/screens/coordinator/student_management_screen_refactored.dart
+import 'package:brainmoto_app/widgets/error_dailog.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/coordinator_provider.dart';
@@ -392,6 +393,7 @@ class _AddStudentDialogState extends State<_AddStudentDialog> {
   final _uidController = TextEditingController();
   String? _selectedGrade;
   String? _selectedDivision;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -461,10 +463,24 @@ class _AddStudentDialogState extends State<_AddStudentDialog> {
                 if (!_formKey.currentState!.validate()) return;
 
                 final level = school.gradeToLevelMap[_selectedGrade] ?? 1;
+                final existingUIds =
+                    provider.students.map((s) => s.uid.toLowerCase()).toSet();
+
+                final uid = _uidController.text.trim().toLowerCase();
+
+                // Check for duplicate UID (exclude current student if editing)
+                if (existingUIds.contains(uid)) {
+                  ErrorDialog.show(
+                    context,
+                    message: 'UID "$uid" already exists in the database',
+                    title: 'Duplicate UID',
+                  );
+                  return;
+                }
 
                 final student = StudentModel(
                   id: '',
-                  uid: _uidController.text.trim(),
+                  uid: uid,
                   name: _nameController.text.trim(),
                   schoolId: school.id,
                   grade: _selectedGrade!,

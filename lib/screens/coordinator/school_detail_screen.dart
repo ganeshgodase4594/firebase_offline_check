@@ -139,7 +139,7 @@ class SchoolDetailScreenRefactored extends StatelessWidget {
                 () => Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (_) => const UploadTeachersScreenRefactored(),
+                    builder: (_) => const UploadTeachersNewFormat(),
                   ),
                 ),
               ),

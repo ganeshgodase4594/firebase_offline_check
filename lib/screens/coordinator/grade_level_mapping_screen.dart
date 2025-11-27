@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/coordinator_provider.dart';
+import '../../service/firebase_service.dart';
 import '../../service/firebase_service_extension.dart';
 
 class GradeRemappingScreenRefactored extends StatefulWidget {
@@ -39,11 +40,20 @@ class _GradeRemappingScreenRefactoredState
     if (school == null) return;
 
     setState(() {
-      _localMapping = Map.from(school.gradeToLevelMap);
       _isLoadingGrades = true;
     });
 
     try {
+      // CRITICAL FIX: Fetch fresh school data from Firestore
+      final freshSchool = await FirebaseService.getSchool(school.id);
+
+      if (freshSchool == null) {
+        throw Exception('Could not load school data');
+      }
+
+      // Use fresh mapping from Firestore
+      _localMapping = Map.from(freshSchool.gradeToLevelMap);
+
       final grades =
           await FirebaseServiceExtensions.getUniqueGradesFromSchool(school.id);
 
@@ -78,6 +88,13 @@ class _GradeRemappingScreenRefactoredState
     });
   }
 
+  // NEW: Check if a level is already used by another grade
+  bool _isLevelUsed(int level, String currentGrade) {
+    return _localMapping.entries.any(
+      (entry) => entry.key != currentGrade && entry.value == level,
+    );
+  }
+
   void _addCustomGrade() {
     showDialog(
       context: context,
@@ -107,11 +124,31 @@ class _GradeRemappingScreenRefactoredState
                     items: List.generate(8, (i) => i + 1)
                         .map((level) => DropdownMenuItem(
                               value: level,
-                              child: Text('Level $level'),
+                              // Disable if level is already used
+                              enabled: !_isLevelUsed(level, ''),
+                              child: Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    'Level $level',
+                                    style: TextStyle(
+                                      color: _isLevelUsed(level, '')
+                                          ? Colors.grey
+                                          : Colors.black,
+                                    ),
+                                  ),
+                                  if (_isLevelUsed(level, ''))
+                                    const Icon(Icons.block,
+                                        size: 16, color: Colors.red),
+                                ],
+                              ),
                             ))
                         .toList(),
                     onChanged: (value) {
-                      setDialogState(() => selectedLevel = value!);
+                      if (value != null && !_isLevelUsed(value, '')) {
+                        setDialogState(() => selectedLevel = value);
+                      }
                     },
                   ),
                 ],
@@ -128,6 +165,16 @@ class _GradeRemappingScreenRefactoredState
                   onPressed: () {
                     final gradeName = _gradeController.text.trim();
                     if (gradeName.isNotEmpty) {
+                      if (_localMapping.containsKey(gradeName)) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('This grade already exists!'),
+                            backgroundColor: Colors.orange,
+                          ),
+                        );
+                        return;
+                      }
+
                       setState(() {
                         _localMapping[gradeName] = selectedLevel;
                         _hasChanges = true;
@@ -410,6 +457,11 @@ class _GradeRemappingScreenRefactoredState
                                 style: TextStyle(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 8),
+                              const Text(
+                                '⚠️ Each level can only be assigned to one grade',
+                                style: TextStyle(
+                                    fontSize: 12, color: Colors.orange),
+                              ),
                               if (_actualGrades != null)
                                 Text(
                                   'Grades currently in use: ${_actualGrades!.length}',
@@ -494,13 +546,38 @@ class _GradeRemappingScreenRefactoredState
                                             items:
                                                 List.generate(8, (i) => i + 1)
                                                     .map((level) {
+                                              final isLevelUsed = _isLevelUsed(
+                                                  level, entry.key);
                                               return DropdownMenuItem(
                                                 value: level,
-                                                child: Text('Level $level'),
+                                                enabled: !isLevelUsed,
+                                                child: Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    Text(
+                                                      'Level $level',
+                                                      style: TextStyle(
+                                                        color: isLevelUsed
+                                                            ? Colors.grey
+                                                            : Colors.black,
+                                                      ),
+                                                    ),
+                                                    if (isLevelUsed)
+                                                      const SizedBox(width: 8),
+                                                    if (isLevelUsed)
+                                                      const Icon(Icons.block,
+                                                          size: 14,
+                                                          color: Colors.red),
+                                                  ],
+                                                ),
                                               );
                                             }).toList(),
                                             onChanged: (value) {
-                                              if (value != null) {
+                                              if (value != null &&
+                                                  !_isLevelUsed(
+                                                      value, entry.key)) {
                                                 _updateMapping(
                                                     entry.key, value);
                                               }
