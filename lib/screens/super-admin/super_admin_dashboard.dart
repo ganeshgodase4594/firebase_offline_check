@@ -6,7 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/connectivity_provider.dart';
 
 class SuperAdminDashboard extends StatelessWidget {
-  const SuperAdminDashboard({Key? key}) : super(key: key);
+  const SuperAdminDashboard({super.key});
 
   @override
   Widget build(BuildContext context) {

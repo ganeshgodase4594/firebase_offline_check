@@ -1,9 +1,17 @@
 // lib/main.dart - UPDATED with ALL providers
+import 'package:brainmoto_app/core/app_colors.dart';
 import 'package:brainmoto_app/firebase_options.dart';
 import 'package:brainmoto_app/providers/coordinator_provider.dart';
+import 'package:brainmoto_app/router/app_router.dart';
 import 'package:brainmoto_app/screens/coordinator/school_detail_screen.dart';
 import 'package:brainmoto_app/screens/super-admin/super_admin_dashboard.dart';
+import 'package:brainmoto_app/screens/teacher/assessment_question_screen_figma.dart';
+import 'package:brainmoto_app/screens/teacher/assessment_type_screen_figma.dart';
+import 'package:brainmoto_app/screens/teacher/bottom_navigationbar_figma.dart';
+import 'package:brainmoto_app/screens/teacher/student_list_screen_figma.dart';
+import 'package:brainmoto_app/screens/teacher/assessment_workflow_screen_figma.dart';
 import 'package:brainmoto_app/screens/teacher/teacher_dashboard.dart';
+import 'package:brainmoto_app/screens/teacher/teacher_dashboard_screen_figma.dart';
 import 'package:brainmoto_app/service/firebase_service.dart';
 import 'package:brainmoto_app/service/offline_service.dart';
 import 'package:flutter/material.dart';
@@ -51,65 +59,32 @@ class BrainmotoApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
-      providers: [
-        // Core providers
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
-        ChangeNotifierProvider(create: (_) => AppProvider()),
+        providers: [
+          // Core providers
+          ChangeNotifierProvider(create: (_) => AuthProvider()),
+          ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
+          ChangeNotifierProvider(create: (_) => AppProvider()),
 
-        // Feature providers (available globally)
-        ChangeNotifierProvider(create: (_) => SchoolProvider()),
-        ChangeNotifierProvider(create: (_) => StudentProvider()),
-        ChangeNotifierProvider(create: (_) => TeacherProvider()),
-        ChangeNotifierProvider(create: (_) => QuestionProvider()),
-        ChangeNotifierProvider(
-            create: (_) => CoordinatorProvider()..loadSchools())
+          // Feature providers (available globally)
+          ChangeNotifierProvider(create: (_) => SchoolProvider()),
+          ChangeNotifierProvider(create: (_) => StudentProvider()),
+          ChangeNotifierProvider(create: (_) => TeacherProvider()),
+          ChangeNotifierProvider(create: (_) => QuestionProvider()),
+          ChangeNotifierProvider(
+              create: (_) => CoordinatorProvider()..loadSchools())
 
-        // Assessment provider created locally in assessment screens
-      ],
-      child: MaterialApp(
-        title: 'Brainmoto MSAP',
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primaryColor: const Color(0xFF4e3f8a),
-          scaffoldBackgroundColor: const Color(0xFFf2efff),
-          colorScheme: ColorScheme.fromSeed(
-            seedColor: const Color(0xFF4e3f8a),
-            secondary: const Color(0xFFf5d527),
-          ),
-          appBarTheme: const AppBarTheme(
-            backgroundColor: Color(0xFF4e3f8a),
-            foregroundColor: Colors.white,
-            elevation: 0,
-          ),
-          elevatedButtonTheme: ElevatedButtonThemeData(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF4e3f8a),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
+          // Assessment provider created locally in assessment screens
+        ],
+        child: MaterialApp.router(
+          title: 'Brainmoto MSAP',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            appBarTheme: AppBarTheme(
+              backgroundColor: AppColors.appBarBackColor.withValues(alpha: .9),
+              elevation: 0,
             ),
           ),
-          inputDecorationTheme: InputDecorationTheme(
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-            ),
-            filled: true,
-            fillColor: Colors.white,
-          ),
-        ),
-        home: const SplashScreen(),
-        routes: {
-          '/login': (context) => const LoginScreen(),
-          '/teacher-dashboard': (context) => const TeacherDashboardRefactored(),
-          '/coordinator-dashboard': (context) =>
-              const CoordinatorDashboardRefactored(),
-          '/super-admin-dashboard': (context) => const SuperAdminDashboard(),
-          '/school-detail': (context) => const SchoolDetailScreenRefactored()
-        },
-      ),
-    );
+          routerConfig: appRouter,
+        ));
   }
 }
